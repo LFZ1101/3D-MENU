@@ -1,0 +1,28 @@
+{
+  "name": "menuar",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @menuar/web --filter @menuar/worker run dev",
+    "dev:web": "pnpm --filter @menuar/web dev",
+    "dev:worker": "pnpm --filter @menuar/worker dev",
+    "build": "pnpm --filter @menuar/shared build && pnpm --filter @menuar/web build && pnpm --filter @menuar/worker build",
+    "lint": "pnpm --filter @menuar/shared lint && pnpm --filter @menuar/web lint && pnpm --filter @menuar/worker lint",
+    "typecheck": "pnpm --filter @menuar/shared typecheck && pnpm --filter @menuar/web typecheck && pnpm --filter @menuar/worker typecheck",
+    "test": "pnpm --filter @menuar/shared test && pnpm --filter @menuar/web test && pnpm --filter @menuar/worker test",
+    "test:e2e": "pnpm --filter @menuar/web test:e2e",
+    "preview": "pnpm --filter @menuar/web preview",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.3",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd"]
+  }
+}
