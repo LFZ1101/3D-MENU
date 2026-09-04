@@ -45,6 +45,9 @@ const AdminRestaurantDetailPage = lazy(() =>
 const AdminModelRequestsPage = lazy(() =>
   import('@/pages/admin/admin-pages').then((m) => ({ default: m.AdminModelRequestsPage })),
 );
+const AdminSubscriptionsPage = lazy(() =>
+  import('@/pages/admin/admin-pages').then((m) => ({ default: m.AdminSubscriptionsPage })),
+);
 const AdminPlaceholderPage = lazy(() =>
   import('@/pages/admin/admin-pages').then((m) => ({ default: m.AdminPlaceholderPage })),
 );
@@ -211,7 +214,7 @@ export function AppRoutes() {
           path="subscriptions"
           element={
             <LazyFrame>
-              <AdminPlaceholderPage title="Assinaturas" />
+              <AdminSubscriptionsPage />
             </LazyFrame>
           }
         />

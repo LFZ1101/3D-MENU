@@ -17,10 +17,31 @@ test('qr redirect', async ({ page }) => {
   await expect(page).toHaveURL(/\/r\/casa-fogo/);
 });
 
-test('login painel', async ({ page }) => {
+test('login painel e CRUD básico', async ({ page }) => {
   await page.goto('/login');
   await page.getByLabel('E-mail').fill('owner@casafogo.demo');
   await page.getByLabel('Senha').fill('demo-password');
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByText('Casa Fogo')).toBeVisible();
+
+  await page.getByRole('navigation').getByRole('link', { name: 'Produtos' }).click();
+  await page.getByPlaceholder('Nome').fill('Item E2E');
+  await page.getByPlaceholder('Resumo').fill('Criado no teste');
+  await page.getByRole('button', { name: 'Adicionar' }).click();
+  await expect(page.getByText('Item E2E')).toBeVisible();
+
+  await page.getByRole('navigation').getByRole('link', { name: 'QR Codes' }).click();
+  await expect(page.getByText('/q/mesa12')).toBeVisible();
+});
+
+test('admin kanban e assinaturas', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('E-mail').fill('admin@menuar.demo');
+  await page.getByLabel('Senha').fill('demo-password');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page.getByText('Operação interna')).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Solicitações 3D' }).click();
+  await expect(page.getByRole('paragraph').filter({ hasText: 'customer_review' })).toBeVisible();
+  await page.getByRole('navigation').getByRole('link', { name: 'Assinaturas' }).click();
+  await expect(page.getByRole('button', { name: 'active' }).first()).toBeVisible();
 });

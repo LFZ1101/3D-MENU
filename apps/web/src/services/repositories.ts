@@ -1,30 +1,22 @@
 import type {
   AnalyticsEventInput,
-  AnalyticsSummary,
   Category,
   ModelRequest,
+  ModelRequestStatus,
   Product,
   QrCode,
   Restaurant,
+  RestaurantMember,
   Subscription,
-  Unit,
 } from '@menuar/shared';
 import { appConfig } from '@/lib/config';
-import {
-  demoAnalytics,
-  demoCategories,
-  demoModelRequests,
-  demoProducts,
-  demoQrCodes,
-  demoRestaurant,
-  demoSubscription,
-  demoUnit,
-  secondRestaurant,
-} from './mock/data';
+import { shouldUseMockData } from '@/lib/supabase';
+import { supabaseMenuApi } from '@/services/api/supabase-menu';
+import { mockStore } from '@/services/mock/store';
 
 export interface MenuBundle {
   restaurant: Restaurant;
-  unit: Unit | null;
+  unit: ReturnType<typeof mockStore.getUnit> | null;
   categories: Category[];
   products: Product[];
 }
@@ -32,39 +24,38 @@ export interface MenuBundle {
 export interface DashboardData {
   restaurant: Restaurant;
   subscription: Subscription;
-  analytics: AnalyticsSummary;
+  analytics: ReturnType<typeof mockStore.getAnalytics>;
   modelRequests: ModelRequest[];
   unavailableCount: number;
   qrCodes: QrCode[];
+  notifications: ReturnType<typeof mockStore.getNotifications>;
 }
+
+export type TeamMember = RestaurantMember & { fullName: string; email: string };
 
 const mockEvents: AnalyticsEventInput[] = [];
 
-async function mockDelay(ms = 120): Promise<void> {
+async function mockDelay(ms = 80): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const menuRepository = {
   async getBySlug(slug: string): Promise<MenuBundle | null> {
-    if (!appConfig.useMockData) {
-      // Integração real: consultar Supabase / Worker
-      return null;
+    if (!shouldUseMockData()) {
+      return supabaseMenuApi.getBySlug(slug);
     }
     await mockDelay();
-    if (slug !== demoRestaurant.slug) return null;
+    const restaurant = mockStore.getRestaurant();
+    if (slug !== restaurant.slug) return null;
     return {
-      restaurant: demoRestaurant,
-      unit: demoUnit,
-      categories: demoCategories,
-      products: [...demoProducts],
+      restaurant,
+      unit: mockStore.getUnit(),
+      categories: mockStore.getCategories(),
+      products: mockStore.getProducts(),
     };
   },
 
-  async getProduct(restaurantSlug: string, productSlug: string): Promise<{
-    restaurant: Restaurant;
-    product: Product;
-    category: Category | null;
-  } | null> {
+  async getProduct(restaurantSlug: string, productSlug: string) {
     const menu = await this.getBySlug(restaurantSlug);
     if (!menu) return null;
     const product = menu.products.find((item) => item.slug === productSlug);
@@ -73,84 +64,204 @@ export const menuRepository = {
     return { restaurant: menu.restaurant, product, category };
   },
 
-  async resolveQr(shortCode: string): Promise<{
-    qr: QrCode;
-    restaurant: Restaurant;
-  } | null> {
-    await mockDelay(60);
-    const qr = demoQrCodes.find((item) => item.shortCode === shortCode && item.active);
+  async resolveQr(shortCode: string) {
+    if (!shouldUseMockData()) {
+      return supabaseMenuApi.resolveQr(shortCode);
+    }
+    await mockDelay(40);
+    const qr = mockStore.getQrCodes().find((item) => item.shortCode === shortCode && item.active);
     if (!qr) return null;
-    return { qr, restaurant: demoRestaurant };
+    return { qr, restaurant: mockStore.getRestaurant() };
   },
 };
 
 export const dashboardRepository = {
   async getRestaurantDashboard(): Promise<DashboardData> {
     await mockDelay();
+    const products = mockStore.getProducts();
     return {
-      restaurant: demoRestaurant,
-      subscription: demoSubscription,
-      analytics: demoAnalytics,
-      modelRequests: demoModelRequests,
-      unavailableCount: demoProducts.filter((p) => !p.isAvailable).length,
-      qrCodes: demoQrCodes,
+      restaurant: mockStore.getRestaurant(),
+      subscription: mockStore.getSubscription(),
+      analytics: mockStore.getAnalytics(),
+      modelRequests: mockStore.getModelRequests(),
+      unavailableCount: products.filter((p) => !p.isAvailable).length,
+      qrCodes: mockStore.getQrCodes(),
+      notifications: mockStore.getNotifications(),
     };
+  },
+
+  async listCategories() {
+    await mockDelay();
+    return mockStore.getAllCategories();
+  },
+
+  async createCategory(input: { name: string; description?: string | null }) {
+    await mockDelay();
+    return mockStore.createCategory(input);
+  },
+
+  async updateCategory(id: string, input: Partial<Category>) {
+    await mockDelay();
+    return mockStore.updateCategory(id, input);
+  },
+
+  async archiveCategory(id: string) {
+    await mockDelay();
+    return mockStore.archiveCategory(id);
+  },
+
+  async reorderCategories(orderedIds: string[]) {
+    await mockDelay();
+    return mockStore.reorderCategories(orderedIds);
   },
 
   async listProducts(): Promise<Product[]> {
     await mockDelay();
-    return [...demoProducts];
+    return mockStore.getProducts();
   },
 
-  async updateProductAvailability(productId: string, isAvailable: boolean): Promise<Product> {
+  async createProduct(input: {
+    name: string;
+    categoryId: string;
+    priceCents: number;
+    shortDescription?: string | null;
+    description?: string | null;
+  }) {
     await mockDelay();
-    const product = demoProducts.find((item) => item.id === productId);
-    if (!product) throw new Error('Produto não encontrado');
-    product.isAvailable = isAvailable;
-    return { ...product };
+    return mockStore.createProduct(input);
   },
 
-  async updateProductPrice(productId: string, priceCents: number): Promise<Product> {
+  async updateProduct(id: string, input: Partial<Product>) {
     await mockDelay();
-    const product = demoProducts.find((item) => item.id === productId);
-    if (!product) throw new Error('Produto não encontrado');
-    product.priceCents = priceCents;
-    return { ...product };
+    return mockStore.updateProduct(id, input);
+  },
+
+  async updateProductAvailability(productId: string, isAvailable: boolean) {
+    return this.updateProduct(productId, { isAvailable });
+  },
+
+  async updateProductPrice(productId: string, priceCents: number) {
+    return this.updateProduct(productId, { priceCents });
+  },
+
+  async duplicateProduct(id: string) {
+    await mockDelay();
+    return mockStore.duplicateProduct(id);
+  },
+
+  async updateBranding(input: Partial<Restaurant>) {
+    await mockDelay();
+    return mockStore.updateBranding(input);
   },
 
   async listModelRequests(): Promise<ModelRequest[]> {
     await mockDelay();
-    return [...demoModelRequests];
+    return mockStore.getModelRequests();
+  },
+
+  async createModelRequest(input: {
+    productId: string;
+    widthCm?: number | null;
+    heightCm?: number | null;
+    depthCm?: number | null;
+    notes?: string | null;
+  }) {
+    await mockDelay();
+    return mockStore.createModelRequest(input);
+  },
+
+  async reviewModel(id: string, decision: 'approved' | 'changes_requested', comment?: string) {
+    await mockDelay();
+    return mockStore.reviewModel(id, decision, comment);
+  },
+
+  async createQrCode(input: {
+    shortCode: string;
+    sourceType: QrCode['sourceType'];
+    tableLabel?: string | null;
+    campaignName?: string | null;
+  }) {
+    await mockDelay();
+    return mockStore.createQrCode(input);
+  },
+
+  async listMembers(): Promise<TeamMember[]> {
+    await mockDelay();
+    return mockStore.getMembers();
+  },
+
+  async addMember(input: { fullName: string; email: string; role: RestaurantMember['role'] }) {
+    await mockDelay();
+    return mockStore.addMember(input);
+  },
+
+  async markNotificationRead(id: string) {
+    await mockDelay();
+    return mockStore.markNotificationRead(id);
   },
 };
 
 export const adminRepository = {
   async listRestaurants(): Promise<Restaurant[]> {
     await mockDelay();
-    return [demoRestaurant, secondRestaurant];
+    return mockStore.getRestaurants();
+  },
+
+  async getRestaurant(id: string) {
+    await mockDelay();
+    return mockStore.getRestaurants().find((item) => item.id === id) ?? null;
+  },
+
+  async updateRestaurantStatus(id: string, status: Restaurant['status']) {
+    await mockDelay();
+    return mockStore.updateRestaurantStatus(id, status);
   },
 
   async listModelRequests(): Promise<ModelRequest[]> {
     await mockDelay();
-    return [...demoModelRequests];
+    return mockStore.getModelRequests();
+  },
+
+  async updateModelRequestStatus(id: string, status: ModelRequestStatus, notes?: string) {
+    await mockDelay();
+    return mockStore.updateModelRequestStatus(id, status, notes);
+  },
+
+  async listSubscriptions() {
+    await mockDelay();
+    return mockStore.getSubscriptions();
+  },
+
+  async updateSubscriptionStatus(id: string, status: Subscription['status']) {
+    await mockDelay();
+    return mockStore.updateSubscriptionStatus(id, status);
   },
 
   async getOverview() {
     await mockDelay();
+    const restaurants = mockStore.getRestaurants();
+    const subscriptions = mockStore.getSubscriptions();
+    const products = mockStore.getProducts();
+    const requests = mockStore.getModelRequests();
     return {
-      activeRestaurants: 1,
-      trialRestaurants: 1,
-      pastDue: 0,
-      totalModels: demoProducts.filter((p) => p.has3d).length,
-      pendingRequests: demoModelRequests.length,
+      activeRestaurants: restaurants.filter((r) => r.status === 'active').length,
+      trialRestaurants: subscriptions.filter((s) => s.status === 'trialing').length,
+      pastDue: subscriptions.filter((s) => s.status === 'past_due' || s.status === 'grace_period').length,
+      totalModels: products.filter((p) => p.has3d).length,
+      pendingRequests: requests.filter((r) =>
+        ['submitted', 'material_review', 'processing', 'internal_review', 'customer_review'].includes(
+          r.status,
+        ),
+      ).length,
       avgArRate: 0.089,
+      storageMbApprox: 42,
     };
   },
 };
 
 export const analyticsRepository = {
   async track(event: AnalyticsEventInput): Promise<void> {
-    if (appConfig.useMockData) {
+    if (shouldUseMockData()) {
       mockEvents.push(event);
       if (import.meta.env.DEV) {
         console.info('[analytics:mock]', event.eventName, event);
@@ -178,5 +289,34 @@ export const authRepository = {
       email,
       role: email.includes('admin') ? 'super_admin' : 'owner',
     };
+  },
+};
+
+export const uploadRepository = {
+  async requestSignedUpload(input: {
+    restaurantId: string;
+    key: string;
+    contentType: string;
+    sizeBytes: number;
+    kind: 'image' | 'model';
+    token?: string;
+  }) {
+    const response = await fetch(`${appConfig.apiUrl}/api/uploads/sign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${input.token || 'mock-token'}`,
+      },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(payload?.error || 'Falha ao autorizar upload');
+    }
+    return response.json() as Promise<{
+      uploadUrl: string;
+      publicUrl: string | null;
+      expiresIn: number;
+    }>;
   },
 };

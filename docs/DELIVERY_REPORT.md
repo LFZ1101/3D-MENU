@@ -2,11 +2,11 @@
 
 ## 1. Resumo
 
-MVP comercial do **MenuAR** criado do zero como monorepo pnpm: landing, cardápio demo Casa Fogo, painéis, Worker, schema Supabase+RLS, analytics, QR, docs e CI. Funciona em modo mock sem credenciais.
+MVP comercial do **MenuAR** em monorepo pnpm: landing, cardápio demo Casa Fogo, painéis com CRUD, Worker expandido, schema Supabase+RLS, analytics, QR com download, docs e CI. Funciona em modo mock sem credenciais; camada Supabase pronta para ativação.
 
 ## 2. Arquitetura final
 
-React/Vite (Pages) → Supabase (Auth/Postgres/RLS) + Worker Hono (analytics/upload) → R2 (mídia) → model-viewer (3D/AR sob demanda).
+React/Vite (Pages) → Supabase (Auth/Postgres/RLS) + Worker Hono (analytics/upload/QR/menu) → R2 (mídia) → model-viewer (3D/AR sob demanda).
 
 ## 3. Estrutura
 
@@ -14,41 +14,40 @@ React/Vite (Pages) → Supabase (Auth/Postgres/RLS) + Worker Hono (analytics/upl
 
 ## 4. Funcionalidades concluídas
 
-- Landing original + planos configuráveis
-- Cardápio público / produto / busca / filtros
-- Fallback 3D sem GLB
-- QR `/q/:code` com evento
-- Painel restaurante (dashboard, produtos, modelos, QR, analytics)
-- Admin interno (overview, restaurantes, solicitações)
-- Worker health + analytics validation + contrato de upload
-- Migrations + seed + RLS
-- Mock mode tipado
+- Landing + planos + demo Casa Fogo
+- Cardápio público / produto / busca / filtros / fallback 3D
+- QR `/q/:code` + download SVG/PNG
+- Painel: dashboard, categorias, produtos (CRUD), modelos (solicitação/aprovação), QR, analytics, branding, equipe, notificações
+- Admin: overview, restaurantes (ativar/suspender), kanban 3D, assinaturas manuais
+- Worker: health, analytics, QR resolve, menu stub, upload sign/confirm, security headers
+- Cliente Supabase + switch mock automático
+- Migrations + RLS + seed
 - Documentação completa
 
 ## 5. Simuladas (mock)
 
-Auth, CRUD persistente, upload R2 real, persistência analytics, gestão avançada de branding/equipe.
+Auth real Supabase, upload R2 assinado de ponta a ponta, persistência analytics em produção.
 
-## 6. Pendências reais
+## 6. Pendências reais (bloqueio de credencial)
 
-Credenciais Supabase/Cloudflare/R2, GLB/USDZ demo, Object Capture no Mac, gateway (fora do MVP), Lighthouse em staging.
+- Autenticar MCP/projeto Supabase e preencher secrets
+- Bucket R2 + domínio Cloudflare Pages/Worker
+- Arquivos GLB/USDZ demo
+- Object Capture no Mac
+- Lighthouse em staging
+- Gateway (fora do MVP)
 
 ## 7. Testes
 
-- Unit: shared 7 + web 1 + worker 2 = **10 passed**
-- E2E Playwright: **3 passed**
-- Lint/typecheck/build: **ok**
+- Unit shared + web + worker
+- E2E Playwright ampliado (CRUD + admin)
+- Lint / typecheck / build
 
-## 8. Build
-
-- `apps/web/dist` gerado
-- Worker wrangler dry-run ok
-
-## 9–18. Operação
+## 8–18. Operação
 
 Ver `.env.example`, `docs/DEPLOYMENT.md`, `docs/MODEL_3D_PIPELINE.md`.
 
-Login mock: qualquer e-mail válido; `admin@...` → `/admin`.
+Login mock: qualquer e-mail; `admin@...` → `/admin`.
 
 ## 19. Limitações
 

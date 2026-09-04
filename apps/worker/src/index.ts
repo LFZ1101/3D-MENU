@@ -1,25 +1,37 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { analyticsEventSchema, UPLOAD_LIMITS, ALLOWED_IMAGE_MIME, ALLOWED_MODEL_MIME } from '@menuar/shared';
+import {
+  analyticsEventSchema,
+  UPLOAD_LIMITS,
+  ALLOWED_IMAGE_MIME,
+  ALLOWED_MODEL_MIME,
+  qrRedirectSchema,
+} from '@menuar/shared';
 import { rateLimit } from './middleware/rate-limit';
+import { securityHeaders } from './middleware/security-headers';
 import { createLogger } from './services/logger';
 
 type Bindings = {
-  MEDIA_BUCKET: R2Bucket;
+  MEDIA_BUCKET?: R2Bucket;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   R2_PUBLIC_BASE_URL?: string;
   APP_NAME?: string;
+  APP_URL?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
 const logger = createLogger('menuar-worker');
 
-app.use('*', cors({
-  origin: (origin) => origin || '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use('*', securityHeaders());
+app.use(
+  '*',
+  cors({
+    origin: (origin) => origin || '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+  }),
+);
 
 app.get('/health', (c) =>
   c.json({
@@ -29,6 +41,69 @@ app.get('/health', (c) =>
   }),
 );
 
+app.get('/api/qr/:shortCode', rateLimit({ limit: 120, windowMs: 60_000 }), async (c) => {
+  const parsed = qrRedirectSchema.safeParse({ shortCode: c.req.param('shortCode') });
+  if (!parsed.success) return c.json({ error: 'Código inválido' }, 400);
+
+  if (c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY) {
+    const response = await fetch(
+      `${c.env.SUPABASE_URL}/rest/v1/qr_codes?short_code=eq.${encodeURIComponent(parsed.data.shortCode)}&active=eq.true&select=*,restaurants(*)`,
+      {
+        headers: {
+          apikey: c.env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+    if (!response.ok) {
+      logger.error('qr_lookup_failed', { status: response.status });
+      return c.json({ error: 'Falha ao resolver QR' }, 502);
+    }
+    const rows = (await response.json()) as Array<Record<string, unknown>>;
+    if (!rows[0]) return c.json({ error: 'QR não encontrado' }, 404);
+    return c.json({ qr: rows[0] });
+  }
+
+  // Fallback de desenvolvimento: contrato estável para o front mock.
+  return c.json({
+    qr: {
+      short_code: parsed.data.shortCode,
+      destination_path: '/r/casa-fogo',
+      source_type: 'table',
+      active: true,
+      mock: true,
+    },
+  });
+});
+
+app.get('/api/menu/:slug', rateLimit({ limit: 120, windowMs: 60_000 }), async (c) => {
+  const slug = c.req.param('slug');
+  if (!slug || slug.length < 2) return c.json({ error: 'Slug inválido' }, 400);
+
+  if (!(c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY)) {
+    return c.json({
+      mock: true,
+      message: 'Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY para servir menu real.',
+      slug,
+    });
+  }
+
+  const restaurantRes = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/restaurants?slug=eq.${encodeURIComponent(slug)}&status=eq.active&select=*`,
+    {
+      headers: {
+        apikey: c.env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  if (!restaurantRes.ok) return c.json({ error: 'Falha ao buscar restaurante' }, 502);
+  const restaurants = (await restaurantRes.json()) as Array<Record<string, unknown>>;
+  if (!restaurants[0]) return c.json({ error: 'Restaurante não encontrado' }, 404);
+
+  return c.json({ restaurant: restaurants[0] });
+});
+
 app.post('/api/analytics/events', rateLimit({ limit: 60, windowMs: 60_000 }), async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = analyticsEventSchema.safeParse(body);
@@ -37,8 +112,7 @@ app.post('/api/analytics/events', rateLimit({ limit: 60, windowMs: 60_000 }), as
     return c.json({ error: 'Evento inválido' }, 400);
   }
 
-  // Persistência real via Supabase service role quando configurada.
-  if (c.env.SUPABASE_URL && c.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY) {
     const response = await fetch(`${c.env.SUPABASE_URL}/rest/v1/analytics_events`, {
       method: 'POST',
       headers: {
@@ -81,7 +155,7 @@ app.post('/api/uploads/sign', rateLimit({ limit: 20, windowMs: 60_000 }), async 
   const auth = c.req.header('Authorization');
   if (!auth) return c.json({ error: 'Não autorizado' }, 401);
 
-  const body = await c.req.json().catch(() => null) as {
+  const body = (await c.req.json().catch(() => null)) as {
     restaurantId?: string;
     key?: string;
     contentType?: string;
@@ -94,7 +168,10 @@ app.post('/api/uploads/sign', rateLimit({ limit: 20, windowMs: 60_000 }), async 
   }
 
   const allowlist = body.kind === 'image' ? ALLOWED_IMAGE_MIME : ALLOWED_MODEL_MIME;
-  if (!(allowlist as readonly string[]).includes(body.contentType) && body.contentType !== 'application/octet-stream') {
+  if (
+    !(allowlist as readonly string[]).includes(body.contentType) &&
+    body.contentType !== 'application/octet-stream'
+  ) {
     return c.json({ error: 'MIME type não permitido' }, 400);
   }
 
@@ -107,15 +184,43 @@ app.post('/api/uploads/sign', rateLimit({ limit: 20, windowMs: 60_000 }), async 
     return c.json({ error: 'Chave de armazenamento inválida' }, 400);
   }
 
-  // Em produção, gerar URL assinada real do R2.
-  // Aqui retornamos um contrato estável para o front-end.
   const uploadUrl = `https://upload.local/${body.key}?signature=dev`;
   return c.json({
     uploadUrl,
-    publicUrl: c.env.R2_PUBLIC_BASE_URL
-      ? `${c.env.R2_PUBLIC_BASE_URL}/${body.key}`
-      : null,
+    publicUrl: c.env?.R2_PUBLIC_BASE_URL ? `${c.env.R2_PUBLIC_BASE_URL}/${body.key}` : null,
     expiresIn: 120,
+  });
+});
+
+app.post('/api/uploads/confirm', rateLimit({ limit: 20, windowMs: 60_000 }), async (c) => {
+  const auth = c.req.header('Authorization');
+  if (!auth) return c.json({ error: 'Não autorizado' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as {
+    restaurantId?: string;
+    key?: string;
+    sizeBytes?: number;
+    mimeType?: string;
+  } | null;
+
+  if (!body?.restaurantId || !body.key || !body.sizeBytes || !body.mimeType) {
+    return c.json({ error: 'Payload incompleto' }, 400);
+  }
+
+  if (!body.key.startsWith(`restaurants/${body.restaurantId}/`)) {
+    return c.json({ error: 'Chave inválida' }, 400);
+  }
+
+  logger.info('upload_confirmed', {
+    restaurantId: body.restaurantId,
+    sizeBytes: body.sizeBytes,
+    mimeType: body.mimeType,
+  });
+
+  return c.json({
+    ok: true,
+    storageKey: body.key,
+    publicUrl: c.env?.R2_PUBLIC_BASE_URL ? `${c.env.R2_PUBLIC_BASE_URL}/${body.key}` : null,
   });
 });
 
