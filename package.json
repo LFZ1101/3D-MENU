@@ -12,7 +12,10 @@
     "test:e2e": "pnpm --filter @menuar/web test:e2e",
     "preview": "pnpm --filter @menuar/web preview",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "infra:connect": "bash scripts/connect-infra.sh",
+    "infra:provision": "bash scripts/provision-stripe-projects.sh",
+    "supabase:types": "supabase gen types typescript --linked > packages/shared/src/types/database.ts"
   },
   "devDependencies": {
     "prettier": "^3.5.3",

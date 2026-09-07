@@ -1,0 +1,9 @@
+# Cloudflare Pages
+# Build command: pnpm install && pnpm --filter @menuar/shared build && pnpm --filter @menuar/web build
+# Output directory: apps/web/dist
+# Root directory: /
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

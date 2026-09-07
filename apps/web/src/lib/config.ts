@@ -2,11 +2,20 @@ import { APP_CONFIG } from '@menuar/shared';
 
 const env = import.meta.env;
 
+const hasSupabase = Boolean(env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY);
+
 export const appConfig = {
   name: env.VITE_APP_NAME || APP_CONFIG.name,
   url: env.VITE_APP_URL || 'http://localhost:5173',
   apiUrl: env.VITE_API_URL || 'http://localhost:8787',
-  useMockData: env.VITE_USE_MOCK_DATA !== 'false',
+  // Mock fica ativo por padrão; desliga automaticamente quando Supabase está configurado,
+  // a menos que VITE_USE_MOCK_DATA=true force o mock.
+  useMockData:
+    env.VITE_USE_MOCK_DATA === 'true'
+      ? true
+      : env.VITE_USE_MOCK_DATA === 'false'
+        ? false
+        : !hasSupabase,
   pricingEnabled: env.VITE_PUBLIC_PRICING_ENABLED !== 'false',
   supabaseUrl: env.VITE_SUPABASE_URL || '',
   supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY || '',
