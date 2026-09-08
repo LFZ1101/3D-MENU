@@ -2,37 +2,37 @@
 
 ## Provisionamento rápido (Stripe Projects)
 
-1. Autenticar Stripe CLI (browser):
+Estado atual do projeto `workspace`:
+
+| Serviço | Estado |
+|---------|--------|
+| Supabase `menuar` | Ligado + schema/seed aplicados |
+| Cloudflare `workers:free` + `menuar-worker` | Ligado |
+| Cloudflare R2 `menuar-media` | Pendente de método de pagamento |
+
+1. Autenticar Stripe CLI / Projects (já feito nesta conta).
+2. Provisionar o que falta:
    ```bash
-   stripe login --non-interactive --new-session
-   # abra browser_url e digite verification_code
-   stripe login --complete-device
+   # Após adicionar billing no checkout Stripe Projects:
+   stripe projects add cloudflare/r2:bucket --name menuar-media --config '{"name":"menuar-media"}' --accept-tos --yes --confirm-paid-service
+   stripe projects env --pull
+   pnpm infra:connect
    ```
-2. Provisionar:
-   ```bash
-   pnpm infra:provision
-   ```
-   Isso cria/conecta:
-   - Supabase project (DB + Auth + Storage)
-   - Cloudflare R2 bucket `menuar-media`
-   - Cloudflare Workers
-3. Aplicar schema:
-   ```bash
-   supabase link --project-ref <ref>
-   supabase db push
-   supabase db query -f supabase/seed.sql
-   ```
+3. Schema (já aplicado no projeto live; reaplicar se necessário via pooler/psql com `SUPABASE_DB_PASS`).
 
 ## Conectar env local
 
 ```bash
+stripe projects env --pull
 pnpm infra:connect
 pnpm dev
 ```
 
 `VITE_USE_MOCK_DATA` desliga automaticamente quando `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` existem.
 
-## Front-end (Cloudflare Pages)
+O script mapeia nomes do Stripe Projects (`SUPABASE_PROJECT_URL`, `SUPABASE_PUBLISHABLE_KEY`, `MENUAR_WORKER_ACCOUNT_ID`, …) para as vars da app.
+
+## Front-end (Cloudflare Pages / Workers assets)
 
 - Build: `pnpm install && pnpm --filter @menuar/shared build && pnpm --filter @menuar/web build`
 - Output: `apps/web/dist`
@@ -41,6 +41,8 @@ pnpm dev
 ```bash
 pnpm --filter @menuar/web exec wrangler pages deploy dist --project-name menuar-web
 ```
+
+Requer `wrangler login` ou `CLOUDFLARE_API_TOKEN`.
 
 ## Worker
 
@@ -52,7 +54,7 @@ Secrets do Worker (`wrangler secret put`):
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (opcional; publishable funciona para leituras públicas/analytics)
 - `R2_PUBLIC_BASE_URL`
 
 ## Auth redirect URLs (Supabase)
@@ -64,9 +66,10 @@ Adicionar:
 
 ## R2
 
-1. Bucket `menuar-media`
-2. Domínio público/CDN
-3. Bind `MEDIA_BUCKET` no `apps/worker/wrangler.toml`
+1. Completar billing Stripe Projects
+2. Bucket `menuar-media`
+3. Domínio público/CDN
+4. Bind `MEDIA_BUCKET` no `apps/worker/wrangler.toml`
 
 ## Ambientes
 
