@@ -1,6 +1,7 @@
 name = "menuar-worker"
 main = "src/index.ts"
 compatibility_date = "2025-03-01"
+workers_dev = true
 
 [vars]
 APP_NAME = "MenuAR"

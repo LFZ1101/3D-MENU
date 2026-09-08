@@ -1,29 +1,17 @@
 # Deployment — MenuAR
 
-## Provisionamento rápido (Stripe Projects)
+## Estado atual
 
-Estado atual do projeto `workspace`:
+| Serviço | Estado | URL |
+|---------|--------|-----|
+| Supabase `menuar` | Live (DB + Storage) | — |
+| Worker `menuar-worker` | Live (free) | https://menuar-worker.ddv8tdvr5m.workers.dev |
+| Pages `menuar-web` | Live (free) | https://menuar-web.pages.dev |
+| R2 | Opcional (billing) | — |
 
-| Serviço | Estado |
-|---------|--------|
-| Supabase `menuar` | Ligado + schema/seed + Storage `menuar-media` |
-| Cloudflare `workers:free` + `menuar-worker` | Ligado |
-| Cloudflare R2 | **Opcional** (exige cartão no Stripe Projects) — MVP não precisa |
+Demo: https://menuar-web.pages.dev/demo → Casa Fogo
 
-1. Autenticar Stripe CLI / Projects (já feito nesta conta).
-2. Conectar env:
-   ```bash
-   stripe projects env --pull
-   pnpm infra:connect
-   ```
-3. Schema/Storage: migrations em `supabase/migrations/` (incluindo bucket público `menuar-media`).
-
-## Mídia sem pagar
-
-O MVP usa **Supabase Storage** (incluído no plano free do projeto).  
-R2 só faz sentido depois, se quiseres CDN/object storage dedicado — e aí o Stripe Projects pede método de pagamento mesmo no free tier da Cloudflare.
-
-## Conectar env local
+## Local
 
 ```bash
 stripe projects env --pull
@@ -31,48 +19,37 @@ pnpm infra:connect
 pnpm dev
 ```
 
-`VITE_USE_MOCK_DATA` desliga automaticamente quando `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` existem.
+`VITE_USE_MOCK_DATA` desliga automaticamente com credenciais Supabase.
 
-## Front-end (Cloudflare Pages / Workers assets)
-
-- Build: `pnpm install && pnpm --filter @menuar/shared build && pnpm --filter @menuar/web build`
-- Output: `apps/web/dist`
-- SPA fallback: `apps/web/public/_redirects`
+## Redeploy
 
 ```bash
-pnpm --filter @menuar/web exec wrangler pages deploy dist --project-name menuar-web
-```
-
-Requer `wrangler login` ou `CLOUDFLARE_API_TOKEN`.
-
-## Worker
-
-```bash
+# Worker
+pnpm --filter @menuar/shared build
+pnpm --filter @menuar/worker exec wrangler secret put SUPABASE_URL   # se mudou
 pnpm --filter @menuar/worker exec wrangler deploy
+
+# Pages (build com API pública)
+VITE_API_URL=https://menuar-worker.ddv8tdvr5m.workers.dev pnpm --filter @menuar/web build
+pnpm --filter @menuar/worker exec wrangler pages deploy apps/web/dist --project-name menuar-web --branch main --commit-dirty=true
 ```
 
-Secrets / vars do Worker:
+Requer `wrangler login` (OAuth device funciona sem cartão).
+
+## Secrets do Worker
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (opcional)
-- `SUPABASE_STORAGE_BUCKET` (default `menuar-media`)
-- `R2_PUBLIC_BASE_URL` (só se usares R2)
+- `SUPABASE_STORAGE_BUCKET` (default via `[vars]`)
+- `APP_URL`
 
 ## Auth redirect URLs (Supabase)
 
-Adicionar:
-
 - `http://localhost:5173/*`
-- `https://<seu-dominio>/*`
+- `https://menuar-web.pages.dev/*`
 
-## R2 (opcional, pago via billing Stripe Projects)
+## Mídia
 
-1. Completar billing Stripe Projects
-2. `stripe projects add cloudflare/r2:bucket --name menuar-media --config '{"name":"menuar-media"}' --accept-tos --yes --confirm-paid-service`
-3. Descomentar `[[r2_buckets]]` em `apps/worker/wrangler.toml`
-
-## Ambientes
-
-- Preview / Staging / Production
-- Rollback: redeploy da versão anterior no Pages + Worker
+MVP: Supabase Storage bucket `menuar-media` (free).  
+R2 só se quiseres object storage dedicado (Stripe Projects exige cartão).
