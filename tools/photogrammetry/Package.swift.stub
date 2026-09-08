@@ -1,0 +1,51 @@
+# MenuAR Photogrammetry CLI (macOS + RealityKit Object Capture)
+# Este utilitário deve ser compilado em um Mac com suporte a Object Capture.
+# Não execute em ambientes Linux/CI incompatíveis.
+
+/*
+ Build (no Mac):
+   swift build -c release
+
+ Uso:
+   menuar-photogrammetry \
+     --input ./captures/prato-01 \
+     --output ./exports/prato-01.usdz \
+     --detail medium
+*/
+
+import Foundation
+
+@main
+struct MenuARPhotogrammetry {
+  static func main() async {
+    let args = Array(CommandLine.arguments.dropFirst())
+    guard
+      let inputIndex = args.firstIndex(of: "--input"),
+      let outputIndex = args.firstIndex(of: "--output"),
+      args.indices.contains(inputIndex + 1),
+      args.indices.contains(outputIndex + 1)
+    else {
+      fputs("Uso: menuar-photogrammetry --input <dir> --output <file.usdz> [--detail medium]\n", stderr)
+      exit(2)
+    }
+
+    let input = args[inputIndex + 1]
+    let output = args[outputIndex + 1]
+    let detail = args.contains("--detail")
+      ? args[(args.firstIndex(of: "--detail") ?? 0) + 1]
+      : "medium"
+
+    #if os(macOS)
+    print("MenuAR Photogrammetry")
+    print("Input: \(input)")
+    print("Output: \(output)")
+    print("Detail: \(detail)")
+    print("Nota: integre PhotogrammetrySession / Object Capture no Mac de produção.")
+    print("Ambiente atual apenas documenta a interface CLI.")
+    exit(0)
+    #else
+    fputs("Object Capture disponível apenas em macOS compatível.\n", stderr)
+    exit(1)
+    #endif
+  }
+}

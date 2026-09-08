@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Secret scan (basic)
+        run: |
+          if grep -RInE "SUPABASE_SERVICE_ROLE_KEY=[^[:space:]]+|R2_SECRET_ACCESS_KEY=[^[:space:]]+" --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist .; then
+            echo "Possible secrets found" && exit 1
+          fi
+          echo "No obvious secrets found"

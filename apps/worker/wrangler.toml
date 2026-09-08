@@ -1,0 +1,15 @@
+name = "menuar-worker"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+workers_dev = true
+
+[vars]
+APP_NAME = "MenuAR"
+SUPABASE_STORAGE_BUCKET = "menuar-media"
+
+# R2 é opcional. MVP usa Supabase Storage (plano free) sem cartão.
+# Para ativar R2 mais tarde (requer billing no Stripe Projects):
+# [[r2_buckets]]
+# binding = "MEDIA_BUCKET"
+# bucket_name = "menuar-media"
+# preview_bucket_name = "menuar-media-preview"
