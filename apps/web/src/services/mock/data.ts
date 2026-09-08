@@ -19,7 +19,8 @@ export const demoRestaurant: Restaurant = {
   slug: 'casa-fogo',
   description: 'Restaurante demonstrativo — experiência MenuAR com pratos visuais.',
   logoUrl: null,
-  coverUrl: null,
+  coverUrl:
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=80',
   primaryColor: '#39d7a2',
   secondaryColor: '#118a68',
   backgroundColor: '#f4f7f6',

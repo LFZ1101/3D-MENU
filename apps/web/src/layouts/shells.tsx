@@ -16,20 +16,22 @@ const appLinks = [
 export function AppShell() {
   return (
     <div className="min-h-screen bg-paper">
-      <div className="border-b border-line bg-white">
+      <div className="sticky top-0 z-30 border-b border-line/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <span className="font-display text-lg font-semibold text-ink">{appConfig.name}</span>
-            <span className="rounded-full bg-jade-soft px-2 py-0.5 text-xs text-jade-dark">Painel</span>
+            <span className="rounded-md bg-jade-soft px-2 py-0.5 text-xs font-semibold text-jade-dark">
+              Painel
+            </span>
           </div>
-          <NavLink to="/demo" className="text-sm text-muted hover:text-ink">
+          <NavLink to="/demo" className="text-sm font-medium text-muted hover:text-ink">
             Ver cardápio público
           </NavLink>
         </div>
       </div>
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr]">
-        <aside className="h-fit rounded-2xl border border-line bg-white p-3">
-          <nav className="flex flex-col gap-1">
+        <aside className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:overflow-visible lg:px-0">
+          <nav className="flex gap-1 lg:sticky lg:top-20 lg:flex-col lg:rounded-2xl lg:border lg:border-line lg:bg-white lg:p-3">
             {appLinks.map((link) => (
               <NavLink
                 key={link.to}
@@ -37,7 +39,7 @@ export function AppShell() {
                 end={link.end}
                 className={({ isActive }) =>
                   cn(
-                    'rounded-xl px-3 py-2 text-sm font-medium text-muted hover:bg-jade-soft hover:text-ink',
+                    'shrink-0 rounded-xl px-3 py-2 text-sm font-medium text-muted hover:bg-jade-soft hover:text-ink',
                     isActive && 'bg-ink text-white hover:bg-ink hover:text-white',
                   )
                 }
@@ -47,7 +49,7 @@ export function AppShell() {
             ))}
           </nav>
         </aside>
-        <main>
+        <main className="min-w-0">
           <Outlet />
         </main>
       </div>
@@ -69,11 +71,11 @@ const adminLinks = [
 export function AdminShell() {
   return (
     <div className="min-h-screen bg-ink text-white">
-      <div className="border-b border-white/10">
+      <div className="sticky top-0 z-30 border-b border-white/10 bg-ink/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <span className="font-display text-lg font-semibold">{appConfig.name}</span>
-            <span className="rounded-full bg-jade/20 px-2 py-0.5 text-xs text-jade">Admin</span>
+            <span className="rounded-md bg-jade/20 px-2 py-0.5 text-xs font-semibold text-jade">Admin</span>
           </div>
           <NavLink to="/app" className="text-sm text-white/70 hover:text-white">
             Ir ao painel do restaurante
@@ -81,8 +83,8 @@ export function AdminShell() {
         </div>
       </div>
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr]">
-        <aside className="h-fit rounded-2xl border border-white/10 bg-surface-dark p-3">
-          <nav className="flex flex-col gap-1">
+        <aside className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:overflow-visible lg:px-0">
+          <nav className="flex gap-1 lg:sticky lg:top-20 lg:flex-col lg:rounded-2xl lg:border lg:border-white/10 lg:bg-surface-dark lg:p-3">
             {adminLinks.map((link) => (
               <NavLink
                 key={link.to}
@@ -90,7 +92,7 @@ export function AdminShell() {
                 end={link.end}
                 className={({ isActive }) =>
                   cn(
-                    'rounded-xl px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white',
+                    'shrink-0 rounded-xl px-3 py-2 text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white',
                     isActive && 'bg-jade text-ink hover:bg-jade hover:text-ink',
                   )
                 }
@@ -100,7 +102,7 @@ export function AdminShell() {
             ))}
           </nav>
         </aside>
-        <main className="text-ink">
+        <main className="min-w-0">
           <Outlet />
         </main>
       </div>
