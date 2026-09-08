@@ -12,14 +12,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        'flex flex-col items-start gap-3 rounded-2xl border border-dashed border-line bg-white p-6',
-        className,
-      )}
-    >
-      <h3 className="font-display text-lg font-semibold text-ink">{title}</h3>
-      {description ? <p className="max-w-md text-sm text-muted">{description}</p> : null}
+    <div className={cn('flex flex-col items-start gap-3 border-y border-line py-10', className)}>
+      <h3 className="font-display text-2xl font-semibold text-ink">{title}</h3>
+      {description ? <p className="max-w-md text-sm leading-relaxed text-muted">{description}</p> : null}
       {action}
     </div>
   );

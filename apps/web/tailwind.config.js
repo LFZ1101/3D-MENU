@@ -20,16 +20,21 @@ export default {
         'brand-fg': 'var(--brand-fg)',
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['"Archivo"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['"Manrope"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Syne"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 12px 40px rgba(9, 16, 20, 0.08)',
+        soft: '0 18px 50px rgba(7, 16, 20, 0.1)',
+        lift: '0 10px 30px rgba(7, 16, 20, 0.12)',
       },
       keyframes: {
         'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '0%': { opacity: '0', transform: 'translateY(18px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'rise-in': {
+          '0%': { opacity: '0', transform: 'translateY(28px) scale(0.985)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
@@ -37,7 +42,8 @@ export default {
         },
       },
       animation: {
-        'fade-up': 'fade-up 0.5s ease-out both',
+        'fade-up': 'fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'rise-in': 'rise-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both',
         shimmer: 'shimmer 1.4s linear infinite',
       },
     },

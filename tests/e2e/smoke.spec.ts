@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('landing e cardápio demo', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /vê o prato antes de pedir/i })).toBeVisible();
-  await page.getByRole('link', { name: /experimentar agora/i }).first().click();
+  await page.getByRole('main').getByRole('link', { name: /experimentar agora/i }).click();
   await expect(page.getByRole('heading', { name: 'Casa Fogo' })).toBeVisible();
   await page.getByPlaceholder('Buscar prato').fill('Burger');
   await expect(page.getByRole('link', { name: /Burger Brasa/i })).toBeVisible();
