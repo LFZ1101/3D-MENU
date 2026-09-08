@@ -16,6 +16,7 @@ type Bindings = {
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
   R2_PUBLIC_BASE_URL?: string;
   APP_NAME?: string;
   APP_URL?: string;
@@ -27,6 +28,20 @@ const logger = createLogger('menuar-worker');
 function supabaseKey(env: Bindings | undefined): string | undefined {
   if (!env) return undefined;
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
+}
+
+function mediaBucket(env: Bindings | undefined): string {
+  return env?.SUPABASE_STORAGE_BUCKET || 'menuar-media';
+}
+
+function publicMediaUrl(env: Bindings | undefined, key: string): string | null {
+  if (env?.SUPABASE_URL) {
+    return `${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/${mediaBucket(env)}/${key}`;
+  }
+  if (env?.R2_PUBLIC_BASE_URL) {
+    return `${env.R2_PUBLIC_BASE_URL.replace(/\/$/, '')}/${key}`;
+  }
+  return null;
 }
 
 app.use('*', securityHeaders());
@@ -194,11 +209,60 @@ app.post('/api/uploads/sign', rateLimit({ limit: 20, windowMs: 60_000 }), async 
     return c.json({ error: 'Chave de armazenamento inválida' }, 400);
   }
 
+  const key = supabaseKey(c.env);
+  if (c.env?.SUPABASE_URL && key) {
+    const bucket = mediaBucket(c.env);
+    const signRes = await fetch(
+      `${c.env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/upload/sign/${bucket}/${body.key}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+
+    if (!signRes.ok) {
+      const detail = await signRes.text().catch(() => '');
+      logger.error('storage_sign_failed', { status: signRes.status, detail: detail.slice(0, 200) });
+      return c.json({ error: 'Falha ao assinar upload no Storage' }, 502);
+    }
+
+    const signed = (await signRes.json()) as {
+      url?: string;
+      signedUrl?: string;
+      signedURL?: string;
+      token?: string;
+      path?: string;
+    };
+    const relative = signed.url || signed.signedUrl || signed.signedURL;
+    if (!relative) {
+      logger.error('storage_sign_empty', { signed });
+      return c.json({ error: 'Resposta de assinatura inválida' }, 502);
+    }
+    const uploadUrl = relative.startsWith('http')
+      ? relative
+      : `${c.env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1${relative.startsWith('/') ? '' : '/'}${relative}`;
+
+    return c.json({
+      uploadUrl,
+      token: signed.token ?? null,
+      publicUrl: publicMediaUrl(c.env, body.key),
+      expiresIn: 120,
+      provider: 'supabase-storage',
+    });
+  }
+
+  // Fallback de desenvolvimento sem Storage configurado.
   const uploadUrl = `https://upload.local/${body.key}?signature=dev`;
   return c.json({
     uploadUrl,
-    publicUrl: c.env?.R2_PUBLIC_BASE_URL ? `${c.env.R2_PUBLIC_BASE_URL}/${body.key}` : null,
+    publicUrl: publicMediaUrl(c.env, body.key),
     expiresIn: 120,
+    provider: 'dev',
   });
 });
 
@@ -230,7 +294,8 @@ app.post('/api/uploads/confirm', rateLimit({ limit: 20, windowMs: 60_000 }), asy
   return c.json({
     ok: true,
     storageKey: body.key,
-    publicUrl: c.env?.R2_PUBLIC_BASE_URL ? `${c.env.R2_PUBLIC_BASE_URL}/${body.key}` : null,
+    publicUrl: publicMediaUrl(c.env, body.key),
+    provider: c.env?.SUPABASE_URL ? 'supabase-storage' : 'dev',
   });
 });
 

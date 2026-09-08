@@ -4,8 +4,11 @@ compatibility_date = "2025-03-01"
 
 [vars]
 APP_NAME = "MenuAR"
+SUPABASE_STORAGE_BUCKET = "menuar-media"
 
-[[r2_buckets]]
-binding = "MEDIA_BUCKET"
-bucket_name = "menuar-media"
-preview_bucket_name = "menuar-media-preview"
+# R2 é opcional. MVP usa Supabase Storage (plano free) sem cartão.
+# Para ativar R2 mais tarde (requer billing no Stripe Projects):
+# [[r2_buckets]]
+# binding = "MEDIA_BUCKET"
+# bucket_name = "menuar-media"
+# preview_bucket_name = "menuar-media-preview"

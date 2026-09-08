@@ -9,7 +9,7 @@ Plataforma SaaS multiempresa de cardápios digitais com pratos em 3D e realidade
 - Front-end: React + Vite + TypeScript + Tailwind
 - API: Cloudflare Workers + Hono
 - Dados: Supabase (PostgreSQL, Auth, RLS)
-- Mídia: Cloudflare R2
+- Mídia: Supabase Storage (R2 opcional)
 - 3D/AR: Google `<model-viewer>`
 
 ## Requisitos

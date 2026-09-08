@@ -7,7 +7,8 @@ QR / Browser
 React (Cloudflare Pages)
     │
     ├── Supabase Auth + Postgres + RLS
-    ├── Worker (Hono) ── R2 signed uploads / analytics ingest
+    ├── Worker (Hono) ── Supabase Storage uploads / analytics ingest
+    │                      (R2 opcional)
     └── model-viewer (GLB/USDZ sob demanda)
 ```
 
