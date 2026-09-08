@@ -20,10 +20,13 @@ apps/web/dist
 apps/worker/dist
 packages/shared/dist
 
-.projects/cache
-.projects/vault
-.projects/state.test.json
-.projects/state.local.test.json
+.projects/
+.agents/
+.claude/
+.cursor/
+.cursorignore
 .env
 .env.*
 !.env.example
+apps/web/.env
+apps/worker/.dev.vars

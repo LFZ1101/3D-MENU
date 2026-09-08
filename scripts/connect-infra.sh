@@ -6,20 +6,12 @@ cd "$ROOT"
 
 echo "==> MenuAR infra connect"
 
-need() {
-  local name="$1"
-  if [[ -z "${!name:-}" ]]; then
-    echo "Missing required env: $name" >&2
-    return 1
-  fi
-}
-
 # Prefer Stripe Projects synced env if present
-if [[ -f .projects/.env ]]; then
-  echo "Loading .projects/.env"
+if [[ -f .env ]]; then
+  echo "Loading .env (Stripe Projects)"
   set -a
   # shellcheck disable=SC1091
-  source .projects/.env
+  source .env
   set +a
 fi
 
@@ -31,8 +23,21 @@ if [[ -f .env.local ]]; then
   set +a
 fi
 
+# Normalize Stripe Projects Supabase naming → app naming
+export SUPABASE_URL="${SUPABASE_URL:-${SUPABASE_PROJECT_URL:-}}"
+export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}"
+export SUPABASE_SERVICE_ROLE_KEY="${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_KEY:-}}}"
+
+need() {
+  local name="$1"
+  if [[ -z "${!name:-}" ]]; then
+    echo "Missing required env: $name" >&2
+    return 1
+  fi
+}
+
 missing=0
-for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY; do
+for key in SUPABASE_URL SUPABASE_ANON_KEY; do
   if ! need "$key"; then missing=1; fi
 done
 
@@ -40,16 +45,11 @@ if [[ "$missing" -eq 1 ]]; then
   cat <<'EOF'
 Não há credenciais suficientes.
 
-Opções:
-1) Autenticar Stripe CLI e provisionar via Projects (recomendado):
-   stripe login --non-interactive --new-session
-   stripe login --complete-device
-   stripe projects init --accept-tos --yes
-   stripe projects add supabase/project --name menuar --region americas
-   stripe projects add cloudflare/r2:bucket --name menuar-media
-   stripe projects add cloudflare/workers
+1) Stripe Projects:
+   stripe projects env --pull
+   pnpm infra:connect
 
-2) Ou preencher .env.local manualmente a partir do dashboard Supabase/Cloudflare.
+2) Ou preencher .env.local manualmente.
 EOF
   exit 1
 fi
@@ -90,14 +90,19 @@ EOF
 echo "Wrote $WEB_ENV"
 echo "Wrote $WORKER_VARS"
 
+if [[ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]]; then
+  echo "WARN: SUPABASE_SERVICE_ROLE_KEY/SECRET ainda não disponível via Projects."
+  echo "      Worker usará SUPABASE_ANON_KEY/PUBLISHABLE para leituras públicas e analytics."
+fi
+
 if command -v supabase >/dev/null 2>&1; then
-  if [[ -n "${SUPABASE_PROJECT_REF:-}" ]]; then
-    echo "Linking Supabase project $SUPABASE_PROJECT_REF"
-    supabase link --project-ref "$SUPABASE_PROJECT_REF" || true
+  if [[ -n "${SUPABASE_PROJECT_REF:-}" && -n "${SUPABASE_DB_PASS:-}" ]]; then
+    echo "Linking Supabase project ${SUPABASE_PROJECT_REF}"
+    supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASS" --yes || true
     echo "Pushing migrations"
-    supabase db push || true
+    supabase db push --include-all --yes || supabase db push --yes || true
   else
-    echo "SUPABASE_PROJECT_REF não definido — migrations não foram aplicadas remotamente."
+    echo "SUPABASE_PROJECT_REF/DB_PASS ausentes — migrations remotas não aplicadas automaticamente."
   fi
 fi
 

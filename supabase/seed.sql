@@ -43,7 +43,7 @@ insert into public.products (
   ingredients, allergen_notes, is_vegetarian, is_featured, is_available, has_3d, sort_order
 ) values
 (
-  'p1111111-1111-4111-8111-111111111111',
+  'a1111111-1111-4111-8111-111111111111',
   '11111111-1111-4111-8111-111111111111',
   'c1111111-1111-4111-8111-111111111111',
   'Burger Brasa', 'burger-brasa',
@@ -54,7 +54,7 @@ insert into public.products (
   'Contém glúten e lactose.', false, true, true, false, 1
 ),
 (
-  'p2222222-2222-4222-8222-222222222222',
+  'a2222222-2222-4222-8222-222222222222',
   '11111111-1111-4111-8111-111111111111',
   'c2222222-2222-4222-8222-222222222222',
   'Porção da Casa', 'porcao-da-casa',

@@ -14,6 +14,7 @@ import { createLogger } from './services/logger';
 type Bindings = {
   MEDIA_BUCKET?: R2Bucket;
   SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   R2_PUBLIC_BASE_URL?: string;
   APP_NAME?: string;
@@ -22,6 +23,11 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 const logger = createLogger('menuar-worker');
+
+function supabaseKey(env: Bindings | undefined): string | undefined {
+  if (!env) return undefined;
+  return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
+}
 
 app.use('*', securityHeaders());
 app.use(
@@ -45,13 +51,14 @@ app.get('/api/qr/:shortCode', rateLimit({ limit: 120, windowMs: 60_000 }), async
   const parsed = qrRedirectSchema.safeParse({ shortCode: c.req.param('shortCode') });
   if (!parsed.success) return c.json({ error: 'Código inválido' }, 400);
 
-  if (c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY) {
+  const key = supabaseKey(c.env);
+  if (c.env?.SUPABASE_URL && key) {
     const response = await fetch(
       `${c.env.SUPABASE_URL}/rest/v1/qr_codes?short_code=eq.${encodeURIComponent(parsed.data.shortCode)}&active=eq.true&select=*,restaurants(*)`,
       {
         headers: {
-          apikey: c.env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          apikey: key,
+          Authorization: `Bearer ${key}`,
         },
       },
     );
@@ -80,10 +87,11 @@ app.get('/api/menu/:slug', rateLimit({ limit: 120, windowMs: 60_000 }), async (c
   const slug = c.req.param('slug');
   if (!slug || slug.length < 2) return c.json({ error: 'Slug inválido' }, 400);
 
-  if (!(c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY)) {
+  const key = supabaseKey(c.env);
+  if (!(c.env?.SUPABASE_URL && key)) {
     return c.json({
       mock: true,
-      message: 'Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY para servir menu real.',
+      message: 'Configure SUPABASE_URL e SUPABASE_ANON_KEY (ou SERVICE_ROLE) para servir menu real.',
       slug,
     });
   }
@@ -92,8 +100,8 @@ app.get('/api/menu/:slug', rateLimit({ limit: 120, windowMs: 60_000 }), async (c
     `${c.env.SUPABASE_URL}/rest/v1/restaurants?slug=eq.${encodeURIComponent(slug)}&status=eq.active&select=*`,
     {
       headers: {
-        apikey: c.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: key,
+        Authorization: `Bearer ${key}`,
       },
     },
   );
@@ -112,12 +120,14 @@ app.post('/api/analytics/events', rateLimit({ limit: 60, windowMs: 60_000 }), as
     return c.json({ error: 'Evento inválido' }, 400);
   }
 
-  if (c.env?.SUPABASE_URL && c.env?.SUPABASE_SERVICE_ROLE_KEY) {
+  const analyticsKey = supabaseKey(c.env);
+  if (c.env?.SUPABASE_URL && analyticsKey) {
+    const key = analyticsKey;
     const response = await fetch(`${c.env.SUPABASE_URL}/rest/v1/analytics_events`, {
       method: 'POST',
       headers: {
-        apikey: c.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: key,
+        Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
