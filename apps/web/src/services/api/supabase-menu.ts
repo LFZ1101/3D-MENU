@@ -5,7 +5,16 @@ import type {
   Restaurant,
   Unit,
 } from '@menuar/shared';
+import { appConfig } from '@/lib/config';
 import { getSupabaseClient } from '@/lib/supabase';
+
+function storagePublicUrl(storageKey: string | null | undefined): string | null {
+  if (!storageKey) return null;
+  if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) return storageKey;
+  const base = appConfig.supabaseUrl?.replace(/\/$/, '');
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/menuar-media/${storageKey}`;
+}
 
 function mapRestaurant(row: Record<string, unknown>): Restaurant {
   return {
@@ -109,28 +118,72 @@ export const supabaseMenuApi = {
     if (error || !restaurant) return null;
 
     const restaurantId = String(restaurant.id);
-    const [{ data: categories }, { data: products }, { data: units }] = await Promise.all([
-      supabase
-        .from('categories')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .eq('active', true)
-        .is('archived_at', null)
-        .order('sort_order'),
-      supabase
-        .from('products')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .is('archived_at', null)
-        .order('sort_order'),
-      supabase.from('units').select('*').eq('restaurant_id', restaurantId).eq('active', true).limit(1),
-    ]);
+    const [{ data: categories }, { data: products }, { data: units }, { data: media }, { data: models }] =
+      await Promise.all([
+        supabase
+          .from('categories')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .eq('active', true)
+          .is('archived_at', null)
+          .order('sort_order'),
+        supabase
+          .from('products')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .is('archived_at', null)
+          .order('sort_order'),
+        supabase.from('units').select('*').eq('restaurant_id', restaurantId).eq('active', true).limit(1),
+        supabase
+          .from('product_media')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .is('archived_at', null)
+          .order('sort_order'),
+        supabase
+          .from('models_3d')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .eq('status', 'published')
+          .is('archived_at', null),
+      ]);
+
+    const mediaByProduct = new Map<string, Record<string, unknown>[]>();
+    for (const row of media ?? []) {
+      const productId = String(row.product_id);
+      const list = mediaByProduct.get(productId) ?? [];
+      list.push(row);
+      mediaByProduct.set(productId, list);
+    }
+
+    const modelByProduct = new Map<string, Record<string, unknown>>();
+    for (const row of models ?? []) {
+      modelByProduct.set(String(row.product_id), row);
+    }
 
     return {
       restaurant: mapRestaurant(restaurant),
       unit: units?.[0] ? mapUnit(units[0]) : null,
       categories: (categories ?? []).map(mapCategory),
-      products: (products ?? []).map(mapProduct),
+      products: (products ?? []).map((row) => {
+        const product = mapProduct(row);
+        const productMedia = mediaByProduct.get(product.id) ?? [];
+        const image =
+          productMedia.find((item) => String(item.media_type) === 'image') ?? productMedia[0];
+        const model = modelByProduct.get(product.id);
+        const imageUrl =
+          (image?.public_url as string | null | undefined) ||
+          storagePublicUrl(image?.storage_key as string | undefined);
+        return {
+          ...product,
+          imageUrl: imageUrl ?? null,
+          posterUrl: storagePublicUrl(model?.poster_storage_key as string | undefined),
+          glbUrl: storagePublicUrl(model?.glb_storage_key as string | undefined),
+          usdzUrl: storagePublicUrl(model?.usdz_storage_key as string | undefined),
+          has3d: Boolean(product.has3d || model?.glb_storage_key),
+          scaleVerified: Boolean(model?.scale_verified),
+        };
+      }),
     };
   },
 

@@ -36,7 +36,15 @@ export R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-${MENUAR_MEDIA_SECRET_ACCES
 export R2_PUBLIC_BASE_URL="${R2_PUBLIC_BASE_URL:-${MENUAR_MEDIA_PUBLIC_BASE_URL:-}}"
 export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-${MENUAR_WORKER_API_TOKEN:-${CLOUDFLARE_PLAN_API_TOKEN:-}}}"
 export WORKERS_DEV_SUBDOMAIN="${WORKERS_DEV_SUBDOMAIN:-${MENUAR_WORKER_WORKERS_DEV_SUBDOMAIN:-}}"
-export VITE_API_URL="${VITE_API_URL:-${MENUAR_WORKER_API_BASE_URL:-http://localhost:8787}}"
+# NÃO usar MENUAR_WORKER_API_BASE_URL (é a API da Cloudflare, não o Worker da app).
+# Em local: localhost:8787. Em produção: https://menuar-worker.<subdomain>.workers.dev
+if [[ -z "${VITE_API_URL:-}" ]]; then
+  if [[ -n "${WORKERS_DEV_SUBDOMAIN}" && "${USE_WORKERS_DEV_API:-}" == "true" ]]; then
+    export VITE_API_URL="https://menuar-worker.${WORKERS_DEV_SUBDOMAIN}.workers.dev"
+  else
+    export VITE_API_URL="http://localhost:8787"
+  fi
+fi
 export SUPABASE_STORAGE_BUCKET="${SUPABASE_STORAGE_BUCKET:-menuar-media}"
 # Public media base defaults to Supabase Storage (free) — R2 only if explicitly set
 if [[ -z "${R2_PUBLIC_BASE_URL}" && -n "${SUPABASE_URL}" ]]; then
