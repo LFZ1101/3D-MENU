@@ -15,14 +15,13 @@ pnpm --filter @menuar/worker exec wrangler deploy
 echo "==> Build web (API=$WORKER_URL)"
 (
   cd apps/web
-  # temporarily set API for production build without rewriting secrets file permanently
   export VITE_API_URL="$WORKER_URL"
-  # vite reads .env — override via env takes precedence for VITE_* in Vite
+  export VITE_APP_URL="${VITE_APP_URL:-https://${PAGES_PROJECT}.pages.dev}"
   pnpm exec vite build
 )
 
 echo "==> Deploy pages"
-pnpm --filter @menuar/worker exec wrangler pages deploy apps/web/dist \
+pnpm --filter @menuar/worker exec wrangler pages deploy "$ROOT/apps/web/dist" \
   --project-name "$PAGES_PROJECT" \
   --branch main \
   --commit-dirty=true
