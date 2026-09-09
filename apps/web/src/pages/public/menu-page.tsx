@@ -7,6 +7,7 @@ import { ProductCard } from '@/components/product/product-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { restaurantThemeStyle } from '@/lib/restaurant-theme';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,11 @@ export function MenuPage() {
     queryKey: ['menu', restaurantSlug],
     queryFn: () => menuRepository.getBySlug(restaurantSlug),
   });
+
+  useDocumentTitle(
+    data ? `Cardápio · ${data.restaurant.name}` : null,
+    data?.restaurant.description || null,
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -148,8 +154,12 @@ export function MenuPage() {
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" aria-hidden />
+            <label htmlFor="menu-search" className="sr-only">
+              Buscar prato por nome ou descrição
+            </label>
             <input
+              id="menu-search"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -161,15 +171,24 @@ export function MenuPage() {
                 }
               }}
               placeholder="Buscar prato"
-              className="h-11 w-full rounded-xl border bg-white/70 pl-10 pr-3 text-sm outline-none transition focus:ring-2"
+              className="h-11 w-full rounded-xl border bg-white/70 pl-10 pr-11 text-base outline-none transition focus:ring-2 sm:text-sm"
               style={{
                 borderColor: 'color-mix(in srgb, var(--restaurant-fg) 14%, transparent)',
                 ['--tw-ring-color' as string]: 'var(--restaurant-primary)',
               }}
-              aria-label="Buscar prato"
             />
+            {query ? (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-sm font-semibold opacity-70 hover:opacity-100"
+                onClick={() => setQuery('')}
+                aria-label="Limpar busca"
+              >
+                ×
+              </button>
+            ) : null}
           </div>
-          <div className="flex gap-1 overflow-x-auto pb-1">
+          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Categorias">
             <FilterTab
               active={categorySlug === 'all'}
               onClick={() => setCategorySlug('all')}
@@ -237,9 +256,11 @@ function FilterTab({
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={cn(
-        'shrink-0 border-b-2 px-3 py-2 text-sm font-semibold transition',
+        'min-h-11 shrink-0 border-b-2 px-3 py-2 text-sm font-semibold transition',
         active
           ? accent
             ? 'border-[var(--restaurant-primary)] text-[var(--restaurant-secondary)]'

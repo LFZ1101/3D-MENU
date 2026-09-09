@@ -7,18 +7,26 @@ import { ProductModelViewer } from '@/components/3d/product-model-viewer';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { restaurantThemeStyle } from '@/lib/restaurant-theme';
 
 export function ProductPage() {
   const { restaurantSlug = '', productSlug = '' } = useParams();
   const { track } = useAnalytics();
+  const { push } = useToast();
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['product', restaurantSlug, productSlug],
     queryFn: () => menuRepository.getProduct(restaurantSlug, productSlug),
   });
+
+  useDocumentTitle(
+    data ? `${data.product.name} · ${data.restaurant.name}` : null,
+    data?.product.shortDescription || data?.product.description || null,
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -120,12 +128,17 @@ export function ProductPage() {
                   productId: product.id,
                 })
               }
-              onArUnavailable={() =>
+              onArUnavailable={() => {
+                push({
+                  title: 'AR indisponível neste dispositivo',
+                  description: 'Você ainda pode explorar o prato em 3D no navegador.',
+                  tone: 'info',
+                });
                 void track('ar_unavailable', {
                   restaurantId: restaurant.id,
                   productId: product.id,
-                })
-              }
+                });
+              }}
             />
           </div>
 

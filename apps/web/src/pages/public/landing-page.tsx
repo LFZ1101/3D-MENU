@@ -42,15 +42,16 @@ export function LandingPage() {
           />
           <div className="surface-grain pointer-events-none absolute inset-0" />
           <div className="relative mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-end px-4 pb-16 pt-28 sm:pb-20 lg:justify-center lg:pb-24">
-            <div className="max-w-2xl space-y-6">
+            <div className="max-w-2xl space-y-6 rounded-3xl bg-ink/55 p-5 backdrop-blur-sm sm:p-7">
               <p className="reveal font-display text-5xl font-extrabold tracking-tight text-jade sm:text-6xl lg:text-7xl">
                 {appConfig.name}
               </p>
               <h1 className="reveal reveal-delay-1 max-w-xl font-display text-3xl font-semibold leading-[1.1] text-white sm:text-4xl lg:text-5xl">
                 Seu cliente vê o prato antes de pedir.
               </h1>
-              <p className="reveal reveal-delay-2 max-w-lg text-base leading-relaxed text-white/75 sm:text-lg">
-                Experiência 3D e AR no navegador — sobre a mesa, sem instalar nada.
+              <p className="reveal reveal-delay-2 max-w-lg text-base leading-relaxed text-white/80 sm:text-lg">
+                Transforme o cardápio do seu restaurante em uma experiência visual com fotos, modelos
+                3D e realidade aumentada — direto pelo navegador, sem aplicativo.
               </p>
               <div className="reveal reveal-delay-3 flex flex-wrap gap-3 pt-1">
                 <Button asChild size="lg">

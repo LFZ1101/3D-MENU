@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { formatBRL, QR_SOURCE_TYPES, type QrSourceType } from '@menuar/shared';
@@ -7,16 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { useToast } from '@/components/ui/toast';
 import { buildQrPngDataUrl, buildQrSvg, downloadDataUrl, downloadTextFile } from '@/lib/qr';
-import {
-  LineChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from 'recharts';
+
+const DashboardChart = lazy(() =>
+  import('@/components/charts/dashboard-chart').then((m) => ({ default: m.DashboardChart })),
+);
 
 export function AppDashboardPage() {
   const queryClient = useQueryClient();
@@ -66,16 +63,9 @@ export function AppDashboardPage() {
         <div className="rounded-2xl border border-line bg-white p-4">
           <h2 className="font-display text-lg font-semibold">Evolução diária</h2>
           <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.analytics.daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#d9e2df" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="views" stroke="#118a68" strokeWidth={2} />
-                <Line type="monotone" dataKey="modelOpens" stroke="#39d7a2" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<Skeleton className="h-full w-full" />}>
+              <DashboardChart data={data.analytics.daily} />
+            </Suspense>
           </div>
         </div>
         <div className="space-y-4">
@@ -121,6 +111,7 @@ export function AppDashboardPage() {
 
 export function AppMenuPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data: categories, isLoading } = useQuery({
     queryKey: ['app-categories'],
     queryFn: () => dashboardRepository.listCategories(),
@@ -135,6 +126,14 @@ export function AppMenuPage() {
       setDescription('');
       void queryClient.invalidateQueries({ queryKey: ['app-categories'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Categoria criada', tone: 'success' });
+    },
+    onError: () => {
+      push({
+        title: 'Não foi possível criar a categoria',
+        description: 'Verifique os dados e tente novamente.',
+        tone: 'error',
+      });
     },
   });
 
@@ -143,6 +142,7 @@ export function AppMenuPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['app-categories'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Categoria arquivada', tone: 'success' });
     },
   });
 
@@ -159,42 +159,62 @@ export function AppMenuPage() {
           createCategory.mutate();
         }}
       >
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          placeholder="Nome da categoria"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          placeholder="Descrição (opcional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <Button type="submit">Criar</Button>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Nome</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            placeholder="Ex.: Principais"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Descrição</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            placeholder="Opcional"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button type="submit" disabled={createCategory.isPending}>
+            {createCategory.isPending ? 'Criando…' : 'Criar'}
+          </Button>
+        </div>
       </form>
 
-      <div className="grid gap-3">
-        {categories.map((category) => (
-          <div key={category.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4">
-            <div>
-              <p className="font-display font-semibold">{category.name}</p>
-              <p className="text-sm text-muted">
-                /{category.slug} · ordem {category.sortOrder}
-                {!category.active ? ' · arquivada' : ''}
-              </p>
+      {categories.length === 0 ? (
+        <EmptyState
+          title="Nenhuma categoria ainda"
+          description="Crie seções como Entradas, Principais e Sobremesas para organizar o cardápio."
+        />
+      ) : (
+        <div className="grid gap-3">
+          {categories.map((category) => (
+            <div
+              key={category.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4"
+            >
+              <div>
+                <p className="font-display font-semibold">{category.name}</p>
+                <p className="text-sm text-muted">
+                  /{category.slug} · ordem {category.sortOrder}
+                  {!category.active ? ' · arquivada' : ''}
+                </p>
+              </div>
+              {category.active ? (
+                <Button size="sm" variant="outline" onClick={() => archiveCategory.mutate(category.id)}>
+                  Arquivar
+                </Button>
+              ) : (
+                <Badge>Arquivada</Badge>
+              )}
             </div>
-            {category.active ? (
-              <Button size="sm" variant="outline" onClick={() => archiveCategory.mutate(category.id)}>
-                Arquivar
-              </Button>
-            ) : (
-              <Badge>Arquivada</Badge>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       <Button asChild variant="outline">
         <Link to="/demo">Ver cardápio público</Link>
       </Button>
@@ -204,6 +224,7 @@ export function AppMenuPage() {
 
 export function AppProductsPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data: products, isLoading } = useQuery({
     queryKey: ['app-products'],
     queryFn: () => dashboardRepository.listProducts(),
@@ -236,15 +257,27 @@ export function AppProductsPage() {
       setShortDescription('');
       void queryClient.invalidateQueries({ queryKey: ['app-products'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Produto criado', description: 'Ele já aparece na lista do cardápio.', tone: 'success' });
+    },
+    onError: () => {
+      push({
+        title: 'Não foi possível criar o produto',
+        description: 'Verifique os dados e tente novamente.',
+        tone: 'error',
+      });
     },
   });
 
   const toggleAvailability = useMutation({
     mutationFn: ({ id, isAvailable }: { id: string; isAvailable: boolean }) =>
       dashboardRepository.updateProductAvailability(id, isAvailable),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['app-products'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({
+        title: vars.isAvailable ? 'Produto disponível' : 'Produto indisponibilizado',
+        tone: 'success',
+      });
     },
   });
 
@@ -254,6 +287,7 @@ export function AppProductsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['app-products'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Preço atualizado', tone: 'success' });
     },
   });
 
@@ -262,6 +296,7 @@ export function AppProductsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['app-products'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Produto duplicado', tone: 'success' });
     },
   });
 
@@ -279,103 +314,127 @@ export function AppProductsPage() {
           createProduct.mutate();
         }}
       >
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          placeholder="Nome"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <select
-          className="h-11 rounded-xl border border-line px-3"
-          value={categoryId || activeCategories[0]?.id || ''}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          {activeCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          type="number"
-          step="0.01"
-          min="0"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          aria-label="Preço"
-        />
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          placeholder="Resumo"
-          value={shortDescription}
-          onChange={(e) => setShortDescription(e.target.value)}
-        />
-        <Button type="submit">Adicionar</Button>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Nome</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            placeholder="Nome do prato"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Categoria</span>
+          <select
+            className="h-11 w-full rounded-xl border border-line px-3"
+            value={categoryId || activeCategories[0]?.id || ''}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            {activeCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Preço (R$)</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            type="number"
+            step="0.01"
+            min="0"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Resumo</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            placeholder="Descrição curta"
+            value={shortDescription}
+            onChange={(e) => setShortDescription(e.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button type="submit" className="w-full" disabled={createProduct.isPending}>
+            {createProduct.isPending ? 'Salvando…' : 'Adicionar'}
+          </Button>
+        </div>
       </form>
 
-      <div className="overflow-hidden rounded-2xl border border-line bg-white">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-line bg-paper text-muted">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Preço</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product.id} className="border-b border-line last:border-0">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{product.name}</p>
-                  <p className="text-xs text-muted">{product.has3d ? 'Com 3D' : 'Somente foto'}</p>
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="number"
-                    className="h-9 w-28 rounded-lg border border-line px-2"
-                    defaultValue={(product.priceCents / 100).toFixed(2)}
-                    step="0.01"
-                    onBlur={(event) => {
-                      const value = Number(event.target.value);
-                      if (!Number.isFinite(value)) return;
-                      updatePrice.mutate({ id: product.id, priceCents: Math.round(value * 100) });
-                    }}
-                    aria-label={`Preço de ${product.name}`}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  {product.isAvailable ? (
-                    <Badge className="border-0 bg-jade-soft text-jade-dark">Disponível</Badge>
-                  ) : (
-                    <Badge className="border-0 bg-danger/10 text-danger">Indisponível</Badge>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        toggleAvailability.mutate({
-                          id: product.id,
-                          isAvailable: !product.isAvailable,
-                        })
-                      }
-                    >
-                      {product.isAvailable ? 'Indisponibilizar' : 'Disponibilizar'}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => duplicate.mutate(product.id)}>
-                      Duplicar
-                    </Button>
-                  </div>
-                </td>
+      <div className="overflow-x-auto rounded-2xl border border-line bg-white">
+        {products.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              title="Você ainda não cadastrou nenhum produto"
+              description="Cadastre o primeiro prato para montar o cardápio público."
+            />
+          </div>
+        ) : (
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-line bg-paper text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Nome</th>
+                <th className="px-4 py-3 font-medium">Preço</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.id} className="border-b border-line last:border-0">
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{product.name}</p>
+                    <p className="text-xs text-muted">{product.has3d ? 'Com 3D' : 'Somente foto'}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      className="h-11 w-28 rounded-lg border border-line px-2"
+                      defaultValue={(product.priceCents / 100).toFixed(2)}
+                      step="0.01"
+                      onBlur={(event) => {
+                        const value = Number(event.target.value);
+                        if (!Number.isFinite(value)) return;
+                        updatePrice.mutate({ id: product.id, priceCents: Math.round(value * 100) });
+                      }}
+                      aria-label={`Preço de ${product.name}`}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    {product.isAvailable ? (
+                      <Badge className="border-0 bg-jade-soft text-jade-dark">Disponível</Badge>
+                    ) : (
+                      <Badge className="border-0 bg-danger/10 text-danger">Indisponível</Badge>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          toggleAvailability.mutate({
+                            id: product.id,
+                            isAvailable: !product.isAvailable,
+                          })
+                        }
+                      >
+                        {product.isAvailable ? 'Indisponibilizar' : 'Disponibilizar'}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => duplicate.mutate(product.id)}>
+                        Duplicar
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -383,6 +442,7 @@ export function AppProductsPage() {
 
 export function AppModelsPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data: requests, isLoading } = useQuery({
     queryKey: ['model-requests'],
     queryFn: () => dashboardRepository.listModelRequests(),
@@ -412,8 +472,23 @@ export function AppModelsPage() {
       }),
     onSuccess: () => {
       setNotes('');
+      setConfirmStatic(false);
+      setConfirmAuth(false);
+      setConfirmResp(false);
       void queryClient.invalidateQueries({ queryKey: ['model-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      push({
+        title: 'Solicitação enviada',
+        description: 'Acompanhe o status abaixo. Você será avisado quando houver revisão.',
+        tone: 'success',
+      });
+    },
+    onError: () => {
+      push({
+        title: 'Não foi possível enviar a solicitação',
+        description: 'Tente novamente em instantes.',
+        tone: 'error',
+      });
     },
   });
 
@@ -425,9 +500,13 @@ export function AppModelsPage() {
       id: string;
       decision: 'approved' | 'changes_requested';
     }) => dashboardRepository.reviewModel(id, decision),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['model-requests'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      push({
+        title: vars.decision === 'approved' ? 'Modelo aprovado' : 'Ajuste solicitado',
+        tone: 'success',
+      });
     },
   });
 
@@ -436,6 +515,10 @@ export function AppModelsPage() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-semibold">Modelos 3D</h1>
+      <p className="text-sm text-muted">
+        Você não precisa entender formatos técnicos. Envie fotos e medidas; nossa produção cuida do
+        restante.
+      </p>
 
       <form
         className="space-y-3 rounded-2xl border border-line bg-white p-4"
@@ -447,27 +530,54 @@ export function AppModelsPage() {
       >
         <h2 className="font-display text-lg font-semibold">Nova solicitação</h2>
         <div className="grid gap-3 md:grid-cols-4">
-          <select
-            className="h-11 rounded-xl border border-line px-3"
-            value={productId || products?.[0]?.id || ''}
-            onChange={(e) => setProductId(e.target.value)}
-          >
-            {(products ?? []).map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
-          <input className="h-11 rounded-xl border border-line px-3" value={widthCm} onChange={(e) => setWidthCm(e.target.value)} placeholder="Largura cm" />
-          <input className="h-11 rounded-xl border border-line px-3" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="Altura cm" />
-          <input className="h-11 rounded-xl border border-line px-3" value={depthCm} onChange={(e) => setDepthCm(e.target.value)} placeholder="Profundidade cm" />
+          <label className="space-y-1 text-sm md:col-span-1">
+            <span className="font-medium">Prato</span>
+            <select
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={productId || products?.[0]?.id || ''}
+              onChange={(e) => setProductId(e.target.value)}
+            >
+              {(products ?? []).map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Largura (cm)</span>
+            <input
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={widthCm}
+              onChange={(e) => setWidthCm(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Altura (cm)</span>
+            <input
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Profundidade (cm)</span>
+            <input
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={depthCm}
+              onChange={(e) => setDepthCm(e.target.value)}
+            />
+          </label>
         </div>
-        <textarea
-          className="min-h-24 w-full rounded-xl border border-line px-3 py-2"
-          placeholder="Observações para produção"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">Observações</span>
+          <textarea
+            className="min-h-24 w-full rounded-xl border border-line px-3 py-2"
+            placeholder="Detalhes úteis para a produção"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={confirmStatic} onChange={(e) => setConfirmStatic(e.target.checked)} />
           Confirmo que o prato permaneceu estático na captura
@@ -480,8 +590,8 @@ export function AppModelsPage() {
           <input type="checkbox" checked={confirmResp} onChange={(e) => setConfirmResp(e.target.checked)} />
           Assumo responsabilidade pelas informações enviadas
         </label>
-        <Button type="submit" disabled={!confirmStatic || !confirmAuth || !confirmResp}>
-          Enviar solicitação
+        <Button type="submit" disabled={!confirmStatic || !confirmAuth || !confirmResp || createRequest.isPending}>
+          {createRequest.isPending ? 'Enviando…' : 'Enviar solicitação'}
         </Button>
       </form>
 
@@ -497,9 +607,9 @@ export function AppModelsPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-display font-semibold">{request.productName}</p>
-                  <p className="text-sm text-muted">Status: {request.status}</p>
+                  <p className="text-sm text-muted">Acompanhe o andamento da produção</p>
                 </div>
-                <Badge>{request.status}</Badge>
+                <StatusBadge label={MODEL_STATUS_LABELS[request.status] ?? request.status} tone="info" />
               </div>
               {request.status === 'customer_review' || request.status === 'internal_review' ? (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -523,8 +633,36 @@ export function AppModelsPage() {
   );
 }
 
+const MODEL_STATUS_LABELS: Record<string, string> = {
+  draft: 'Rascunho',
+  submitted: 'Enviada',
+  material_review: 'Revisão de material',
+  needs_new_capture: 'Nova captura',
+  processing: 'Em produção',
+  internal_review: 'Revisão interna',
+  customer_review: 'Aguardando sua revisão',
+  changes_requested: 'Ajustes pedidos',
+  approved: 'Aprovada',
+  published: 'Publicada',
+  rejected: 'Recusada',
+  archived: 'Arquivada',
+};
+
+const QR_SOURCE_LABELS: Record<QrSourceType, string> = {
+  table: 'Mesa',
+  counter: 'Balcão',
+  menu_print: 'Cardápio impresso',
+  instagram: 'Instagram',
+  whatsapp: 'WhatsApp',
+  delivery_package: 'Embalagem delivery',
+  event: 'Evento',
+  campaign: 'Campanha',
+  other: 'Outro',
+};
+
 export function AppQrCodesPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => dashboardRepository.getRestaurantDashboard(),
@@ -542,6 +680,10 @@ export function AppQrCodesPage() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      push({ title: 'QR Code criado', description: 'Baixe o arquivo e imprima para a mesa ou origem.', tone: 'success' });
+    },
+    onError: () => {
+      push({ title: 'Não foi possível criar o QR Code', tone: 'error' });
     },
   });
 
@@ -558,69 +700,102 @@ export function AppQrCodesPage() {
           createQr.mutate();
         }}
       >
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          value={shortCode}
-          onChange={(e) => setShortCode(e.target.value)}
-          placeholder="Código curto"
-          required
-        />
-        <select
-          className="h-11 rounded-xl border border-line px-3"
-          value={sourceType}
-          onChange={(e) => setSourceType(e.target.value as QrSourceType)}
-        >
-          {QR_SOURCE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-        <input
-          className="h-11 rounded-xl border border-line px-3"
-          value={tableLabel}
-          onChange={(e) => setTableLabel(e.target.value)}
-          placeholder="Mesa / campanha"
-        />
-        <Button type="submit">Criar QR</Button>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Código curto</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            value={shortCode}
+            onChange={(e) => setShortCode(e.target.value)}
+            placeholder="mesa-12"
+            required
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Origem</span>
+          <select
+            className="h-11 w-full rounded-xl border border-line px-3"
+            value={sourceType}
+            onChange={(e) => setSourceType(e.target.value as QrSourceType)}
+          >
+            {QR_SOURCE_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {QR_SOURCE_LABELS[type] ?? type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">Mesa / campanha</span>
+          <input
+            className="h-11 w-full rounded-xl border border-line px-3"
+            value={tableLabel}
+            onChange={(e) => setTableLabel(e.target.value)}
+            placeholder="Mesa 12"
+          />
+        </label>
+        <div className="flex items-end">
+          <Button type="submit" className="w-full" disabled={createQr.isPending}>
+            {createQr.isPending ? 'Criando…' : 'Criar QR'}
+          </Button>
+        </div>
       </form>
 
       <div className="grid gap-3">
-        {data.qrCodes.map((qr) => (
-          <div key={qr.id} className="rounded-2xl border border-line bg-white p-4">
-            <p className="font-display font-semibold">/q/{qr.shortCode}</p>
-            <p className="text-sm text-muted">
-              {qr.sourceType}
-              {qr.tableLabel ? ` · ${qr.tableLabel}` : ''}
-              {qr.campaignName ? ` · ${qr.campaignName}` : ''}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button asChild size="sm" variant="outline">
-                <Link to={`/q/${qr.shortCode}`}>Testar</Link>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  const svg = await buildQrSvg(qr.shortCode, data.restaurant.name);
-                  downloadTextFile(`menuar-${qr.shortCode}.svg`, svg, 'image/svg+xml');
-                }}
-              >
-                Baixar SVG
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  const png = await buildQrPngDataUrl(qr.shortCode);
-                  downloadDataUrl(`menuar-${qr.shortCode}.png`, png);
-                }}
-              >
-                Baixar PNG
-              </Button>
+        {data.qrCodes.length === 0 ? (
+          <EmptyState
+            title="Nenhum QR Code ainda"
+            description="Crie o primeiro código para mesa, Instagram ou material impresso."
+          />
+        ) : (
+          data.qrCodes.map((qr) => (
+            <div key={qr.id} className="rounded-2xl border border-line bg-white p-4">
+              <p className="font-display font-semibold">/q/{qr.shortCode}</p>
+              <p className="text-sm text-muted">
+                {QR_SOURCE_LABELS[qr.sourceType] ?? qr.sourceType}
+                {qr.tableLabel ? ` · ${qr.tableLabel}` : ''}
+                {qr.campaignName ? ` · ${qr.campaignName}` : ''}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/q/${qr.shortCode}`}>Testar destino</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const url = `${window.location.origin}/q/${qr.shortCode}`;
+                    await navigator.clipboard.writeText(url);
+                    push({ title: 'Link copiado', tone: 'success' });
+                  }}
+                >
+                  Copiar link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const svg = await buildQrSvg(qr.shortCode, data.restaurant.name);
+                    downloadTextFile(`menuar-${qr.shortCode}.svg`, svg, 'image/svg+xml');
+                    push({ title: 'SVG baixado', tone: 'success' });
+                  }}
+                >
+                  Baixar SVG
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const png = await buildQrPngDataUrl(qr.shortCode);
+                    downloadDataUrl(`menuar-${qr.shortCode}.png`, png);
+                    push({ title: 'PNG baixado', tone: 'success' });
+                  }}
+                >
+                  Baixar PNG
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
@@ -665,6 +840,7 @@ export function AppAnalyticsPage() {
 
 export function AppSettingsPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => dashboardRepository.getRestaurantDashboard(),
@@ -673,21 +849,39 @@ export function AppSettingsPage() {
   const [description, setDescription] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#39d7a2');
   const [whatsapp, setWhatsapp] = useState('');
+  const [hydrated, setHydrated] = useState(false);
 
   const restaurant = data?.restaurant;
   const ready = Boolean(restaurant);
 
+  useEffect(() => {
+    if (!restaurant || hydrated) return;
+    setName(restaurant.name);
+    setDescription(restaurant.description ?? '');
+    setPrimaryColor(restaurant.primaryColor);
+    setWhatsapp(restaurant.whatsapp ?? '');
+    setHydrated(true);
+  }, [restaurant, hydrated]);
+
   const save = useMutation({
     mutationFn: () =>
       dashboardRepository.updateBranding({
-        name: name || restaurant?.name,
-        description: description || restaurant?.description,
+        name,
+        description,
         primaryColor,
-        whatsapp: whatsapp || restaurant?.whatsapp,
+        whatsapp,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['menu'] });
+      push({ title: 'Aparência salva', tone: 'success' });
+    },
+    onError: () => {
+      push({
+        title: 'Não foi possível salvar',
+        description: 'Verifique os dados e tente novamente.',
+        tone: 'error',
+      });
     },
   });
 
@@ -695,63 +889,86 @@ export function AppSettingsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-2xl font-semibold">Configurações</h1>
+      <h1 className="font-display text-2xl font-semibold">Aparência</h1>
       <div className="rounded-2xl border border-line bg-white p-4 text-sm">
         <p>
           <strong>Plano:</strong> {formatBRL(data.subscription.monthlyPriceCents)}/mês ·{' '}
           {data.subscription.status}
         </p>
+        <p className="mt-1 text-muted">
+          Painel em modo demonstração: alterações ficam nesta sessão até conectar Auth/Supabase no
+          painel.
+        </p>
       </div>
-      <form
-        className="grid gap-3 rounded-2xl border border-line bg-white p-4 md:grid-cols-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save.mutate();
-        }}
-      >
-        <label className="space-y-1 text-sm">
-          <span>Nome</span>
-          <input
-            className="h-11 w-full rounded-xl border border-line px-3"
-            defaultValue={restaurant.name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1 text-sm">
-          <span>WhatsApp</span>
-          <input
-            className="h-11 w-full rounded-xl border border-line px-3"
-            defaultValue={restaurant.whatsapp ?? ''}
-            onChange={(e) => setWhatsapp(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1 text-sm md:col-span-2">
-          <span>Descrição</span>
-          <textarea
-            className="min-h-24 w-full rounded-xl border border-line px-3 py-2"
-            defaultValue={restaurant.description ?? ''}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1 text-sm">
-          <span>Cor principal</span>
-          <input
-            type="color"
-            className="h-11 w-full rounded-xl border border-line px-2"
-            defaultValue={restaurant.primaryColor}
-            onChange={(e) => setPrimaryColor(e.target.value)}
-          />
-        </label>
-        <div className="flex items-end">
-          <Button type="submit">Salvar branding</Button>
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <form
+          className="grid gap-3 rounded-2xl border border-line bg-white p-4 md:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            save.mutate();
+          }}
+        >
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Nome</span>
+            <input
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">WhatsApp</span>
+            <input
+              className="h-11 w-full rounded-xl border border-line px-3"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm md:col-span-2">
+            <span className="font-medium">Descrição</span>
+            <textarea
+              className="min-h-24 w-full rounded-xl border border-line px-3 py-2"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Cor principal</span>
+            <input
+              type="color"
+              className="h-11 w-full rounded-xl border border-line px-2"
+              value={primaryColor}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+            />
+          </label>
+          <div className="flex items-end">
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending ? 'Salvando…' : 'Salvar aparência'}
+            </Button>
+          </div>
+        </form>
+        <div className="overflow-hidden rounded-[1.5rem] border border-line bg-ink text-white shadow-soft">
+          <div className="border-b border-white/10 px-3 py-2 text-xs text-white/60">Preview mobile</div>
+          <div className="space-y-3 p-4" style={{ background: '#f4f7f6', color: '#1d292f' }}>
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-xl font-display text-lg font-bold text-ink"
+              style={{ background: primaryColor }}
+            >
+              {(name || restaurant.name).slice(0, 1)}
+            </div>
+            <p className="font-display text-xl font-semibold">{name || restaurant.name}</p>
+            <p className="text-xs text-muted">{description || 'Descrição pública do restaurante'}</p>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
 
 export function AppTeamPage() {
   const queryClient = useQueryClient();
+  const { push } = useToast();
   const { data: members, isLoading } = useQuery({
     queryKey: ['team'],
     queryFn: () => dashboardRepository.listMembers(),
@@ -766,6 +983,10 @@ export function AppTeamPage() {
       setFullName('');
       setEmail('');
       void queryClient.invalidateQueries({ queryKey: ['team'] });
+      push({ title: 'Membro convidado', tone: 'success' });
+    },
+    onError: () => {
+      push({ title: 'Não foi possível convidar', tone: 'error' });
     },
   });
 
@@ -791,7 +1012,13 @@ export function AppTeamPage() {
         <Button type="submit">Convidar</Button>
       </form>
       <div className="grid gap-3">
-        {members.map((member) => (
+        {members.length === 0 ? (
+          <EmptyState
+            title="Nenhum membro além do proprietário"
+            description="Convide gestores ou editores para ajudar a manter o cardápio."
+          />
+        ) : (
+          members.map((member) => (
           <div key={member.id} className="flex items-center justify-between rounded-2xl border border-line bg-white p-4">
             <div>
               <p className="font-display font-semibold">{member.fullName}</p>
@@ -799,7 +1026,8 @@ export function AppTeamPage() {
             </div>
             <Badge>{member.role}</Badge>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
