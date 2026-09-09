@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { scaleLabel } from '@menuar/shared';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
 interface ModelViewerProps {
@@ -54,6 +54,7 @@ export function ProductModelViewer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activated, setActivated] = useState(false);
+  const [arMessage, setArMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,20 +84,18 @@ export function ProductModelViewer({
     if (usdzUrl) el.setAttribute('ios-src', usdzUrl);
     if (posterUrl) el.setAttribute('poster', posterUrl);
     el.setAttribute('alt', alt);
+    el.setAttribute('camera-controls', '');
+    el.setAttribute('touch-action', 'pan-y');
+    el.setAttribute('shadow-intensity', '0.7');
+    el.setAttribute('environment-image', 'neutral');
     el.setAttribute('ar', '');
     el.setAttribute('ar-modes', 'webxr scene-viewer quick-look');
     el.setAttribute('ar-scale', 'fixed');
     el.setAttribute('ar-placement', 'floor');
-    el.setAttribute('camera-controls', '');
-    el.setAttribute('touch-action', 'pan-y');
-    el.setAttribute('shadow-intensity', '1');
-    el.setAttribute('environment-image', 'neutral');
     el.setAttribute('exposure', '1');
-    el.setAttribute('loading', 'lazy');
-    el.setAttribute('reveal', 'auto');
     el.style.width = '100%';
     el.style.height = '360px';
-    el.style.background = 'transparent';
+    el.setAttribute('aria-labelledby', labelId);
 
     const handleLoad = () => {
       setLoading(false);
@@ -105,17 +104,25 @@ export function ProductModelViewer({
     };
     const handleError = () => {
       setLoading(false);
-      setError('Falha ao carregar o modelo 3D.');
+      setError('Não foi possível carregar o modelo 3D. A foto do prato continua disponível.');
       onLoadError?.('model_load_failed');
+    };
+    const handleProgress = (event: Event) => {
+      const detail = (event as CustomEvent<{ totalProgress?: number }>).detail;
+      if (detail?.totalProgress != null && detail.totalProgress >= 1) {
+        setLoading(false);
+      }
     };
 
     el.addEventListener('load', handleLoad);
     el.addEventListener('error', handleError);
+    el.addEventListener('progress', handleProgress);
     host.appendChild(el);
 
     return () => {
       el.removeEventListener('load', handleLoad);
       el.removeEventListener('error', handleError);
+      el.removeEventListener('progress', handleProgress);
       host.innerHTML = '';
     };
   }, [
@@ -125,6 +132,7 @@ export function ProductModelViewer({
     usdzUrl,
     posterUrl,
     alt,
+    labelId,
     onLoadComplete,
     onLoadError,
   ]);
@@ -133,66 +141,64 @@ export function ProductModelViewer({
     return (
       <div
         className={cn(
-          'flex min-h-[320px] flex-col justify-end rounded-3xl border border-dashed border-line bg-ink p-6 text-white',
+          'flex min-h-[280px] flex-col justify-end rounded-3xl border border-dashed border-line bg-ink p-6 text-white',
           className,
         )}
       >
-        <Badge className="mb-3 w-fit border-0 bg-white/10 text-white">Modelo demonstrativo</Badge>
-        <h3 className="font-display text-xl font-semibold">Modelo 3D ainda não configurado</h3>
-        <p className="mt-2 max-w-md text-sm text-white/70">
-          Defina <code className="text-jade">VITE_DEMO_GLB_URL</code> e opcionalmente{' '}
-          <code className="text-jade">VITE_DEMO_USDZ_URL</code> para ativar a experiência. A fotografia e o
-          cardápio continuam disponíveis.
+        <StatusBadge label="Fotografia disponível" tone="info" className="mb-3 bg-white/10 text-white" />
+        <h3 className="font-display text-xl font-semibold">Modelo 3D ainda não publicado</h3>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-white/70">
+          Este prato ainda não tem arquivo 3D. Você continua vendo a fotografia e as informações do cardápio.
         </p>
-        <Button className="mt-4 w-fit" variant="outline" disabled>
-          Ver na minha mesa
-        </Button>
       </div>
     );
   }
 
   return (
     <div className={cn('overflow-hidden rounded-3xl border border-line bg-white', className)}>
-      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div>
           <p id={labelId} className="font-display text-sm font-semibold text-ink">
             Experiência 3D
           </p>
           <p className="text-xs text-muted">{scaleLabel(scaleVerified)}</p>
         </div>
-        {!usdzUrl ? (
-          <Badge>AR depende de dispositivo compatível</Badge>
-        ) : (
-          <Badge className="border-0 bg-jade-soft text-jade-dark">AR disponível</Badge>
-        )}
+        <StatusBadge
+          label={usdzUrl ? 'AR pronta neste dispositivo*' : 'AR depende do celular/navegador'}
+          tone={usdzUrl ? 'success' : 'info'}
+        />
       </div>
 
       {!activated ? (
-        <div className="relative flex min-h-[360px] flex-col items-start justify-end bg-gradient-to-br from-ink via-surface-dark to-ink p-6">
+        <div className="relative flex min-h-[360px] flex-col items-start justify-end overflow-hidden bg-ink p-6">
           {posterUrl ? (
             <img
               src={posterUrl}
               alt={alt}
-              className="absolute inset-0 h-full w-full object-cover opacity-40"
+              width={800}
+              height={600}
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-45"
             />
           ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(57,215,162,0.25),transparent_45%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(57,215,162,0.25),transparent_45%)]" />
           )}
           <div className="relative space-y-3">
-            <h3 className="font-display text-2xl font-semibold text-white">Explorar em 3D</h3>
-            <p className="max-w-sm text-sm text-white/70">
-              O arquivo é baixado sob demanda para preservar a performance do cardápio.
+            <h3 className="font-display text-2xl font-semibold text-white">Ver em 3D</h3>
+            <p className="max-w-sm text-sm leading-relaxed text-white/75">
+              Gire o prato em todos os ângulos. O arquivo só é baixado quando você pedir — para o cardápio
+              continuar rápido.
             </p>
             <Button
               onClick={() => {
                 setActivated(true);
                 setLoading(true);
                 setError(null);
+                setArMessage(null);
                 startedAt.current = performance.now();
                 onLoadStart?.();
               }}
             >
-              Explorar em 3D
+              Ver em 3D
             </Button>
           </div>
         </div>
@@ -202,41 +208,61 @@ export function ProductModelViewer({
         <div className="relative min-h-[360px] bg-paper">
           <div ref={hostRef} />
           {loading ? (
-            <p
-              className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs text-muted"
+            <div
+              className="absolute inset-x-4 top-4 rounded-xl border border-line bg-white/95 px-3 py-2 text-xs text-muted shadow-soft"
               aria-live="polite"
             >
-              Carregando modelo…
-            </p>
+              Carregando modelo 3D…
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-line">
+                <div className="h-full w-2/3 animate-shimmer rounded-full bg-jade" />
+              </div>
+            </div>
           ) : null}
-          <div className="flex flex-wrap gap-2 border-t border-line p-4">
-            <Button
-              type="button"
-              onClick={() => {
-                const el = hostRef.current?.querySelector('model-viewer') as
-                  | (HTMLElement & { canActivateAR?: boolean; activateAR?: () => void })
-                  | null
-                  | undefined;
-                if (el?.canActivateAR && el.activateAR) {
-                  onArStart?.();
-                  el.activateAR();
-                } else {
-                  onArUnavailable?.();
-                }
-              }}
-            >
-              Ver na minha mesa
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setActivated(false);
-                setError(null);
-              }}
-            >
-              Fechar 3D
-            </Button>
+          <div className="space-y-3 border-t border-line p-4">
+            <p className="text-xs leading-relaxed text-muted">
+              <strong className="text-ink">3D:</strong> gire com o dedo ou mouse.{" "}
+              <strong className="text-ink">AR:</strong> aponta a câmera para uma superfície plana para ver o
+              prato no ambiente.
+            </p>
+            {arMessage ? (
+              <p className="text-sm text-muted" role="status">
+                {arMessage}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  const el = hostRef.current?.querySelector('model-viewer') as
+                    | (HTMLElement & { canActivateAR?: boolean; activateAR?: () => void })
+                    | null
+                    | undefined;
+                  if (el?.canActivateAR && el.activateAR) {
+                    setArMessage(null);
+                    onArStart?.();
+                    el.activateAR();
+                  } else {
+                    const message =
+                      'Seu dispositivo não oferece realidade aumentada neste navegador. Você ainda pode explorar o prato em 3D.';
+                    setArMessage(message);
+                    onArUnavailable?.();
+                  }
+                }}
+              >
+                Ver no meu ambiente
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setActivated(false);
+                  setError(null);
+                  setArMessage(null);
+                }}
+              >
+                Fechar 3D
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

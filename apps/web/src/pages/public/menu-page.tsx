@@ -4,10 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { menuRepository } from '@/services/repositories';
 import { ProductCard } from '@/components/product/product-card';
-import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { restaurantThemeStyle } from '@/lib/restaurant-theme';
 import { cn } from '@/lib/utils';
 
 export function MenuPage() {
@@ -22,6 +23,11 @@ export function MenuPage() {
     queryKey: ['menu', restaurantSlug],
     queryFn: () => menuRepository.getBySlug(restaurantSlug),
   });
+
+  useDocumentTitle(
+    data ? `Cardápio · ${data.restaurant.name}` : null,
+    data?.restaurant.description || null,
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -50,11 +56,11 @@ export function MenuPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-8">
-        <Skeleton className="h-28 w-full" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+      <div className="min-h-screen bg-paper">
+        <Skeleton className="h-[42vh] w-full rounded-none" />
+        <div className="mx-auto grid max-w-5xl gap-4 px-4 py-8 sm:grid-cols-2">
+          <Skeleton className="h-72" />
+          <Skeleton className="h-72" />
         </div>
       </div>
     );
@@ -62,7 +68,7 @@ export function MenuPage() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16">
+      <div className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-16">
         <EmptyState
           title="Cardápio não encontrado"
           description="Verifique o link ou o QR Code e tente novamente."
@@ -77,43 +83,83 @@ export function MenuPage() {
   }
 
   const { restaurant, unit, categories } = data;
+  const cover =
+    restaurant.coverUrl ||
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=80';
 
   return (
-    <div
-      className="min-h-screen"
-      style={{ background: restaurant.backgroundColor, color: restaurant.textColor }}
-    >
-      <header className="relative overflow-hidden bg-ink text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(57,215,162,0.25),transparent_40%)]" />
-        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-6">
-          <div className="mb-6 flex items-center justify-between">
-            <Link to="/" className="text-sm text-white/70 hover:text-white">
+    <div className="min-h-screen" style={restaurantThemeStyle(restaurant)}>
+      <header className="relative isolate min-h-[44vh] overflow-hidden text-white sm:min-h-[48vh]">
+        <img src={cover} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(180deg, rgba(7,16,20,0.35) 0%, rgba(7,16,20,0.72) 55%, color-mix(in srgb, var(--restaurant-bg) 92%, #071014) 100%)`,
+          }}
+        />
+        <div className="relative mx-auto flex min-h-[44vh] max-w-5xl flex-col justify-between px-4 pb-8 pt-5 sm:min-h-[48vh]">
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="text-sm text-white/70 transition hover:text-white">
               MenuAR
             </Link>
-            {restaurant.isDemo ? <Badge className="border-0 bg-white/10 text-white">Demonstração</Badge> : null}
+            {restaurant.isDemo ? (
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                Demonstração
+              </span>
+            ) : null}
           </div>
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-jade font-display text-xl font-bold text-ink">
-                {restaurant.name.slice(0, 1)}
-              </div>
-              <h1 className="font-display text-3xl font-semibold">{restaurant.name}</h1>
-              <p className="mt-2 max-w-xl text-white/70">{restaurant.description}</p>
-              <div className="mt-3 flex flex-wrap gap-2 text-sm text-white/60">
-                {unit?.address ? <span>{unit.address}</span> : null}
-                {unit?.city ? <span>· {unit.city}/{unit.state}</span> : null}
-                <span>· Aberto conforme horário da unidade</span>
+
+          <div className="animate-fade-up space-y-4 pb-2">
+            <div className="flex items-end gap-4">
+              {restaurant.logoUrl ? (
+                <img
+                  src={restaurant.logoUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-2xl object-cover ring-2 ring-white/20"
+                />
+              ) : (
+                <div
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl font-display text-2xl font-bold text-ink"
+                  style={{ background: 'var(--restaurant-primary)' }}
+                >
+                  {restaurant.name.slice(0, 1)}
+                </div>
+              )}
+              <div>
+                <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+                  {restaurant.name}
+                </h1>
+                {(unit?.city || unit?.address) && (
+                  <p className="mt-1 text-sm text-white/70">
+                    {[unit?.address, unit?.city && `${unit.city}${unit.state ? `/${unit.state}` : ''}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
               </div>
             </div>
+            {restaurant.description ? (
+              <p className="max-w-2xl text-base leading-relaxed text-white/80">{restaurant.description}</p>
+            ) : null}
           </div>
         </div>
       </header>
 
-      <div className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur">
+      <div
+        className="sticky top-0 z-20 border-b backdrop-blur-md"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--restaurant-fg) 12%, transparent)',
+          background: 'color-mix(in srgb, var(--restaurant-bg) 88%, white)',
+        }}
+      >
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-45" aria-hidden />
+            <label htmlFor="menu-search" className="sr-only">
+              Buscar prato por nome ou descrição
+            </label>
             <input
+              id="menu-search"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -125,25 +171,34 @@ export function MenuPage() {
                 }
               }}
               placeholder="Buscar prato"
-              className="h-11 w-full rounded-xl border border-line bg-paper pl-10 pr-3 text-sm outline-none ring-jade focus:ring-2"
-              aria-label="Buscar prato"
+              className="h-11 w-full rounded-xl border bg-white/70 pl-10 pr-11 text-base outline-none transition focus:ring-2 sm:text-sm"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--restaurant-fg) 14%, transparent)',
+                ['--tw-ring-color' as string]: 'var(--restaurant-primary)',
+              }}
             />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => setCategorySlug('all')}
-              className={cn(
-                'shrink-0 rounded-full border px-3 py-1.5 text-sm',
-                categorySlug === 'all' ? 'border-ink bg-ink text-white' : 'border-line bg-white',
-              )}
-            >
-              Todos
-            </button>
-            {categories.map((category) => (
+            {query ? (
               <button
-                key={category.id}
                 type="button"
+                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-sm font-semibold opacity-70 hover:opacity-100"
+                onClick={() => setQuery('')}
+                aria-label="Limpar busca"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Categorias">
+            <FilterTab
+              active={categorySlug === 'all'}
+              onClick={() => setCategorySlug('all')}
+              label="Todos"
+            />
+            {categories.map((category) => (
+              <FilterTab
+                key={category.id}
+                active={categorySlug === category.slug}
+                label={category.name}
                 onClick={() => {
                   setCategorySlug(category.slug);
                   void track('category_view', {
@@ -151,26 +206,14 @@ export function MenuPage() {
                     metadata: { category: category.slug },
                   });
                 }}
-                className={cn(
-                  'shrink-0 rounded-full border px-3 py-1.5 text-sm',
-                  categorySlug === category.slug
-                    ? 'border-ink bg-ink text-white'
-                    : 'border-line bg-white',
-                )}
-              >
-                {category.name}
-              </button>
+              />
             ))}
-            <button
-              type="button"
+            <FilterTab
+              active={only3d}
+              label="Com 3D"
+              accent
               onClick={() => setOnly3d((value) => !value)}
-              className={cn(
-                'shrink-0 rounded-full border px-3 py-1.5 text-sm',
-                only3d ? 'border-jade bg-jade text-ink' : 'border-line bg-white',
-              )}
-            >
-              Com 3D
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -182,13 +225,50 @@ export function MenuPage() {
             description="Ajuste a busca ou os filtros para ver outros itens."
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {filtered.map((product) => (
-              <ProductCard key={product.id} product={product} restaurantSlug={restaurant.slug} />
+          <div className="grid gap-6 sm:grid-cols-2">
+            {filtered.map((product, index) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                restaurantSlug={restaurant.slug}
+                style={{ animationDelay: `${Math.min(index, 6) * 50}ms` }}
+                className="animate-rise-in"
+              />
             ))}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function FilterTab({
+  active,
+  label,
+  onClick,
+  accent = false,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'min-h-11 shrink-0 border-b-2 px-3 py-2 text-sm font-semibold transition',
+        active
+          ? accent
+            ? 'border-[var(--restaurant-primary)] text-[var(--restaurant-secondary)]'
+            : 'border-[var(--restaurant-fg)] text-[var(--restaurant-fg)]'
+          : 'border-transparent opacity-55 hover:opacity-90',
+      )}
+    >
+      {label}
+    </button>
   );
 }

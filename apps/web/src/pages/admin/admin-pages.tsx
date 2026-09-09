@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { MODEL_REQUEST_STATUSES, type ModelRequestStatus, type Subscription } from '@menuar/shared';
 import { adminRepository } from '@/services/repositories';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useToast } from '@/components/ui/toast';
 import type { ModelRequest } from '@menuar/shared';
 
 export function AdminDashboardPage() {
@@ -77,6 +79,10 @@ export function AdminRestaurantsPage() {
 export function AdminRestaurantDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
+  const { push } = useToast();
+  const [pendingStatus, setPendingStatus] = useState<'active' | 'suspended' | 'draft' | 'archived' | null>(
+    null,
+  );
   const { data, isLoading } = useQuery({
     queryKey: ['admin-restaurant', id],
     queryFn: () => adminRepository.getRestaurant(id),
@@ -85,10 +91,12 @@ export function AdminRestaurantDetailPage() {
   const updateStatus = useMutation({
     mutationFn: (status: 'active' | 'suspended' | 'draft' | 'archived') =>
       adminRepository.updateRestaurantStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_data, status) => {
       void queryClient.invalidateQueries({ queryKey: ['admin-restaurant', id] });
       void queryClient.invalidateQueries({ queryKey: ['admin-restaurants'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      push({ title: `Status atualizado para ${status}`, tone: 'success' });
+      setPendingStatus(null);
     },
   });
 
@@ -101,10 +109,32 @@ export function AdminRestaurantDetailPage() {
     );
   }
 
+  const confirmCopy =
+    pendingStatus === 'suspended'
+      ? {
+          title: `Suspender “${data.name}”?`,
+          description: 'Clientes podem perder o acesso ao cardápio público enquanto estiver suspenso.',
+          confirmLabel: 'Suspender',
+        }
+      : pendingStatus === 'archived'
+        ? {
+            title: `Arquivar “${data.name}”?`,
+            description: 'Use com cuidado. O restaurante deixa de aparecer como ativo na operação.',
+            confirmLabel: 'Arquivar',
+          }
+        : {
+            title: `Ativar “${data.name}”?`,
+            description: 'O restaurante voltará a aparecer como ativo na operação.',
+            confirmLabel: 'Ativar',
+          };
+
   return (
     <div className="space-y-4 rounded-2xl bg-paper p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Administrando
+          </p>
           <h1 className="font-display text-2xl font-semibold">{data.name}</h1>
           <p className="text-sm text-muted">/{data.slug}</p>
         </div>
@@ -116,28 +146,47 @@ export function AdminRestaurantDetailPage() {
         <p className="text-muted">Tema: {data.theme}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => updateStatus.mutate('active')}>
+        <Button size="sm" onClick={() => setPendingStatus('active')}>
           Ativar
         </Button>
-        <Button size="sm" variant="outline" onClick={() => updateStatus.mutate('suspended')}>
+        <Button size="sm" variant="outline" onClick={() => setPendingStatus('suspended')}>
           Suspender
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => updateStatus.mutate('archived')}>
+        <Button size="sm" variant="ghost" onClick={() => setPendingStatus('archived')}>
           Arquivar
         </Button>
       </div>
+      <ConfirmDialog
+        open={pendingStatus != null}
+        title={confirmCopy.title}
+        description={confirmCopy.description}
+        confirmLabel={confirmCopy.confirmLabel}
+        tone={pendingStatus === 'active' ? 'default' : 'danger'}
+        onCancel={() => setPendingStatus(null)}
+        onConfirm={() => {
+          if (pendingStatus) updateStatus.mutate(pendingStatus);
+        }}
+      />
     </div>
   );
 }
 
-const KANBAN_COLUMNS: ModelRequestStatus[] = [
-  'submitted',
-  'material_review',
-  'processing',
-  'customer_review',
-  'approved',
-  'published',
-];
+const KANBAN_COLUMNS: ModelRequestStatus[] = [...MODEL_REQUEST_STATUSES];
+
+const STATUS_LABELS: Record<ModelRequestStatus, string> = {
+  draft: 'Rascunho',
+  submitted: 'Enviada',
+  material_review: 'Revisão de material',
+  needs_new_capture: 'Nova captura',
+  processing: 'Em produção',
+  internal_review: 'Revisão interna',
+  customer_review: 'Revisão do cliente',
+  changes_requested: 'Ajustes pedidos',
+  approved: 'Aprovada',
+  published: 'Publicada',
+  rejected: 'Recusada',
+  archived: 'Arquivada',
+};
 
 export function AdminModelRequestsPage() {
   const queryClient = useQueryClient();
@@ -172,30 +221,33 @@ export function AdminModelRequestsPage() {
   return (
     <div className="space-y-4 rounded-2xl bg-paper p-4 md:p-6">
       <h1 className="font-display text-2xl font-semibold">Solicitações 3D</h1>
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {KANBAN_COLUMNS.map((status) => (
           <div key={status} className="rounded-2xl border border-line bg-white p-3">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">{status}</p>
+            <p className="mb-3 text-sm font-semibold text-muted">{STATUS_LABELS[status]}</p>
             <div className="space-y-2">
               {(grouped[status] ?? []).map((request) => (
                 <div key={request.id} className="rounded-xl border border-line p-3">
                   <p className="font-medium">{request.productName}</p>
-                  <select
-                    className="mt-2 h-9 w-full rounded-lg border border-line px-2 text-sm"
-                    value={request.status}
-                    onChange={(e) =>
-                      updateStatus.mutate({
-                        id: request.id,
-                        status: e.target.value as ModelRequestStatus,
-                      })
-                    }
-                  >
-                    {MODEL_REQUEST_STATUSES.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="mt-2 block text-xs text-muted">
+                    Status
+                    <select
+                      className="mt-1 h-11 w-full rounded-lg border border-line px-2 text-sm"
+                      value={request.status}
+                      onChange={(e) =>
+                        updateStatus.mutate({
+                          id: request.id,
+                          status: e.target.value as ModelRequestStatus,
+                        })
+                      }
+                    >
+                      {MODEL_REQUEST_STATUSES.map((item) => (
+                        <option key={item} value={item}>
+                          {STATUS_LABELS[item]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               ))}
               {(grouped[status] ?? []).length === 0 ? (

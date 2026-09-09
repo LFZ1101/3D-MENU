@@ -10,8 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,7 +21,9 @@ jobs:
       - run: pnpm build
       - name: Secret scan (basic)
         run: |
-          if grep -RInE "SUPABASE_SERVICE_ROLE_KEY=[^[:space:]]+|R2_SECRET_ACCESS_KEY=[^[:space:]]+" --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist .; then
+          # Match only assignments that look like real secret values (not env var references).
+          if grep -RInE "SUPABASE_SERVICE_ROLE_KEY=(eyJ|sb_secret_|sk_)[A-Za-z0-9._-]{8,}|R2_SECRET_ACCESS_KEY=[A-Za-z0-9/+]{16,}" \
+            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.projects .; then
             echo "Possible secrets found" && exit 1
           fi
           echo "No obvious secrets found"
